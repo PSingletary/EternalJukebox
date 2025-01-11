@@ -56,14 +56,13 @@ inline fun <T> File.useThenDelete(action: (File) -> T): T? {
 
 val logger: Logger = LoggerFactory.getLogger("Miscellaneous")
 
-@OptIn(DelicateCoroutinesApi::class)
 fun File.guaranteeDelete() {
     delete()
     if (exists()) {
         logger.trace("{} was not deleted successfully; deleting on exit and starting coroutine", this)
         deleteOnExit()
 
-        GlobalScope.launch {
+        EternalJukebox.launch {
             val rng = Random()
             var i = 0
             while (isActive && exists()) {

@@ -126,6 +126,7 @@ object H2Database : HikariDatabase() {
     }
 
     override fun makeSongPopular(service: String, id: String, clientInfo: ClientInfo?) {
+//        TODO: This will be suspend soon
         GlobalScope.launch(dispatcher) { popularUpdates[service]?.send(id) }
     }
 

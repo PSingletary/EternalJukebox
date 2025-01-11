@@ -14,9 +14,11 @@ import org.abimon.eternalJukebox.objects.SpotifyError
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.coroutines.CoroutineContext
 
 @OptIn(DelicateCoroutinesApi::class)
-object SpotifyAnalyser : IAnalyser {
+object SpotifyAnalyser : IAnalyser, CoroutineScope {
+    override val coroutineContext: CoroutineContext = SupervisorJob(EternalJukebox.coroutineContext[Job]) + CoroutineName("Spotify Analyser")
     private val token: AtomicReference<String> = AtomicReference("")
     private val logger: Logger = LoggerFactory.getLogger("SpotifyAnalyser")
 
@@ -254,7 +256,7 @@ object SpotifyAnalyser : IAnalyser {
     }
 
     init {
-        GlobalScope.launch {
+        launch {
             while (isActive) {
                 reload()
                 delay(3000 * 1000)

@@ -70,3 +70,7 @@ config.json
 
 build/
 bin/
+
+*.log
+*.db
+referrers.txt

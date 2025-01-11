@@ -113,7 +113,7 @@ object SiteAPI: IAPI {
     }
 
     init {
-        GlobalScope.launch {
+        EternalJukebox.launch {
             while (isActive) {
                 val time = System.currentTimeMillis()
 

@@ -22,10 +22,12 @@ import java.time.Instant
 import java.util.*
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.coroutines.CoroutineContext
 import kotlin.math.abs
 
-@OptIn(DelicateCoroutinesApi::class)
-object YoutubeAudioSource : IAudioSource {
+object YoutubeAudioSource : IAudioSource, CoroutineScope {
+    override val coroutineContext: CoroutineContext = SupervisorJob(EternalJukebox.coroutineContext[Job]) + CoroutineName("YoutubeAudioSource")
+
     @Suppress("JoinDeclarationAndAssignment")
     private val apiKey: String?
     private val uuid: String
@@ -314,7 +316,7 @@ object YoutubeAudioSource : IAudioSource {
         if (apiKey == null) {
             logger.warn("Warning: No API key provided. Only NewPipeExtractor will be used to find audio sources.")
         } else {
-            GlobalScope.launch(Dispatchers.IO) { setRegionCodeForIP() }
+            launch(Dispatchers.IO) { setRegionCodeForIP() }
         }
         NewPipe.init(DownloaderImpl.init())
     }

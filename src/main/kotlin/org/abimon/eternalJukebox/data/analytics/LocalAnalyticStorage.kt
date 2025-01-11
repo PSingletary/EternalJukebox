@@ -1,8 +1,6 @@
 package org.abimon.eternalJukebox.data.analytics
 
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import org.abimon.eternalJukebox.EternalJukebox
 import org.abimon.eternalJukebox.guaranteeDelete
 import org.abimon.eternalJukebox.objects.EnumAnalyticType
@@ -14,9 +12,12 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.PrintStream
 import java.util.*
+import kotlin.coroutines.CoroutineContext
 
 @OptIn(DelicateCoroutinesApi::class)
-object LocalAnalyticStorage : IAnalyticsStorage {
+object LocalAnalyticStorage : IAnalyticsStorage, CoroutineScope {
+    override val coroutineContext: CoroutineContext = SupervisorJob(EternalJukebox.coroutineContext[Job]) + CoroutineName("LocalAnalyticStorage")
+
     private val storageLocations: Map<EnumAnalyticType<*>, File> = EnumAnalyticType.VALUES.associateWith { type ->
         File(
             EternalJukebox.config.analyticsStorageOptions["${type::class.simpleClassName.uppercase(Locale.getDefault())}_FILE"] as? String
@@ -33,7 +34,7 @@ object LocalAnalyticStorage : IAnalyticsStorage {
     }
 
     init {
-        GlobalScope.launch {
+        launch {
             storageLocations.forEach { (type, log) ->
                 if (log.exists()) {
                     if (EternalJukebox.storage.shouldStore(EnumStorageType.LOG)) {

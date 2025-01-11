@@ -13,6 +13,9 @@ import io.vertx.core.Vertx
 import io.vertx.core.VertxOptions
 import io.vertx.core.http.HttpServer
 import io.vertx.ext.web.Router
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 import org.abimon.eternalJukebox.data.analysis.IAnalyser
 import org.abimon.eternalJukebox.data.analysis.SpotifyAnalyser
 import org.abimon.eternalJukebox.data.analytics.IAnalyticsProvider
@@ -36,8 +39,11 @@ import java.util.concurrent.ConcurrentSkipListSet
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
+import kotlin.reflect.jvm.jvmName
 
-object EternalJukebox {
+object EternalJukebox : CoroutineScope {
+    override val coroutineContext = SupervisorJob() + CoroutineName("EternalJukebox") // `SupervisorJob` means this won't be cancelled
+
     val jsonMapper: ObjectMapper = ObjectMapper()
             .registerModules(Jdk8Module(), KotlinModule.Builder().build(), JavaTimeModule(), ParameterNamesModule())
             .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
@@ -53,7 +59,7 @@ object EternalJukebox {
     private val jsonConfig: File = File("config.json")
     private val yamlConfig: File = File("config.yaml")
 
-    val BASE_64_URL = charArrayOf('A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '-', '_')
+    val BASE_64_URL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_".toCharArray()
 
     @Suppress("JoinDeclarationAndAssignment")
     val config: JukeboxConfig
@@ -119,7 +125,7 @@ object EternalJukebox {
 
         // Config Handling
 
-        vertx = Vertx.vertx(VertxOptions().setMaxWorkerExecuteTime(config.workerExecuteTime))
+        vertx = Vertx.vertx(VertxOptions().setMaxWorkerExecuteTime(config.workerExecuteTime).setWarningExceptionTime(1).setWarningExceptionTimeUnit(TimeUnit.SECONDS))
         webserver = vertx.createHttpServer()
 
         storage = config.storageType.storage
@@ -172,14 +178,14 @@ object EternalJukebox {
         }
 
         database = if (isEnabled("database"))
-            config.databaseType.db.objectInstance!!
+            requireNotNull(config.databaseType.db.objectInstance) { "No class of name ${config.databaseType.db.jvmName}"}
         else
             EmptyDataAPI
 
         if (isEnabled("audioAPI")) {
             apis.add(AudioAPI)
 
-            audio = config.audioSourceType.audio.objectInstance
+            audio = requireNotNull(config.audioSourceType.audio.objectInstance) { "No class of name ${config.audioSourceType.audio.jvmName}" }
         } else {
             audio = EmptyDataAPI
         }

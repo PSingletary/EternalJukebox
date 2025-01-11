@@ -34,6 +34,8 @@ import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 
 @OptIn(DelicateCoroutinesApi::class)
+@Deprecated("Deprecated due to disuse")
+//TODO: Remove
 object GoogleStorage : IStorage {
     private val serviceEmail: String
     private val algorithm: Algorithm

@@ -7,8 +7,6 @@ import io.vertx.core.json.JsonObject
 import io.vertx.ext.web.Route
 import io.vertx.ext.web.RoutingContext
 import io.vertx.kotlin.coroutines.dispatcher
-import kotlinx.coroutines.DelicateCoroutinesApi
-import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import org.abimon.eternalJukebox.objects.ClientInfo
 import org.abimon.eternalJukebox.objects.ConstantValues
@@ -23,9 +21,9 @@ fun RoutingContext.endWithStatusCode(statusCode: Int, init: JsonObject.() -> Uni
     json.init()
 
     this.response().setStatusCode(statusCode)
-            .putHeader("Content-Type", "application/json")
-            .putHeader("X-Client-UID", clientInfo.userUID)
-            .end(json.toString())
+        .putHeader("Content-Type", "application/json")
+        .putHeader("X-Client-UID", clientInfo.userUID)
+        .end(json.toString())
 }
 
 fun HttpServerResponse.end(data: DataSource, contentType: String = "application/octet-stream") {
@@ -51,5 +49,9 @@ val RoutingContext.clientInfo: ClientInfo
 
 operator fun JsonObject.set(key: String, value: Any): JsonObject = put(key, value)
 
-@OptIn(DelicateCoroutinesApi::class)
-fun Route.suspendingHandler(handler: suspend (RoutingContext) -> Unit): Route = handler { ctx -> GlobalScope.launch(ctx.vertx().dispatcher()) { handler(ctx) } }
+fun Route.suspendingHandler(handler: suspend (RoutingContext) -> Unit): Route =
+    handler { ctx ->
+        EternalJukebox.launch(ctx.vertx().dispatcher()) {
+            handler(ctx)
+        }
+    }

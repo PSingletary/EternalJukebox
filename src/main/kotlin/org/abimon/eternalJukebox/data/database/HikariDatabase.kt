@@ -18,9 +18,11 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 import kotlin.concurrent.write
+import kotlin.coroutines.CoroutineContext
 
-@OptIn(DelicateCoroutinesApi::class)
-abstract class HikariDatabase : IDatabase {
+abstract class HikariDatabase : IDatabase, CoroutineScope {
+    override val coroutineContext: CoroutineContext = SupervisorJob(EternalJukebox.coroutineContext[Job]) + CoroutineName("HikariDatabase")
+
     abstract val ds: HikariDataSource
     private val timeBetweenUpdatesMs = EternalJukebox.config.hikariBatchTimeBetweenUpdatesMs
     private val shortIdUpdateMs = EternalJukebox.config.hikariBatchShortIDUpdateTimeMs
@@ -66,7 +68,7 @@ abstract class HikariDatabase : IDatabase {
     private val shortIDStorm = LocalisedSnowstorm.getInstance(1585659600000L)
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    val dispatcher = newSingleThreadContext("HikariPropagateDispatcher")
+    val dispatcher = Dispatchers.IO.limitedParallelism(1) + CoroutineName("HikariPropagateDispatcher")
 
     override suspend fun provideAudioTrackOverride(id: String, clientInfo: ClientInfo?): String? {
         val cachedValue = overridesCache.get(id) { _ ->
@@ -110,38 +112,39 @@ abstract class HikariDatabase : IDatabase {
     }
 
     private suspend fun getInfo(songID: String, clientInfo: ClientInfo?): JukeboxInfo? {
-        val cachedValue = infoCache.get(songID) { _, executor ->
-            GlobalScope.future(executor.asCoroutineDispatcher()) {
-                val info = try {
-                    use { connection ->
-                        val select =
-                            connection.prepareStatement("SELECT song_name, song_title, song_artist, song_url, song_duration FROM info_cache WHERE id=? LIMIT 1;")
-                        select.setString(1, songID)
-                        select.execute()
+        return coroutineScope {
+            val cachedValue = infoCache.get(songID) { _, executor ->
+                future(executor.asCoroutineDispatcher()) {
+                    val info = try {
+                        use { connection ->
+                            val select =
+                                connection.prepareStatement("SELECT song_name, song_title, song_artist, song_url, song_duration FROM info_cache WHERE id=? LIMIT 1;")
+                            select.setString(1, songID)
+                            select.execute()
 
-                        select.resultSet.use { rs ->
-                            if (rs.next()) {
-                                JukeboxInfo(
-                                    service = "SPOTIFY",
-                                    id = songID,
-                                    name = rs.getString("song_name"),
-                                    title = rs.getString("song_title"),
-                                    artist = rs.getString("song_artist"),
-                                    url = rs.getString("song_url"),
-                                    duration = rs.getInt("song_duration")
-                                )
-                            } else {
-                                null
+                            select.resultSet.use { rs ->
+                                if (rs.next()) {
+                                    JukeboxInfo(
+                                        service = "SPOTIFY",
+                                        id = songID,
+                                        name = rs.getString("song_name"),
+                                        title = rs.getString("song_title"),
+                                        artist = rs.getString("song_artist"),
+                                        url = rs.getString("song_url"),
+                                        duration = rs.getInt("song_duration")
+                                    )
+                                } else {
+                                    null
+                                }
                             }
                         }
+                    } catch (sqlTransientException: SQLTransientConnectionException) {
+                        logger.warn("Could not obtain connection in time, going to Spotify: ", sqlTransientException)
+                        null
                     }
-                } catch (sqlTransientException: SQLTransientConnectionException) {
-                    logger.warn("Could not obtain connection in time, going to Spotify: ", sqlTransientException)
-                    null
-                }
 
-                if (info != null) return@future info
-                val result = EternalJukebox.spotify.getInfo(songID, clientInfo) ?: return@future null
+                    if (info != null) return@future info
+                    val result = EternalJukebox.spotify.getInfo(songID, clientInfo) ?: return@future null
 
 //                use { connection ->
 //                    val insert =
@@ -155,13 +158,14 @@ abstract class HikariDatabase : IDatabase {
 //                    insert.execute()
 //                }
 
-                infoUpdates.send(result)
+                    infoUpdates.send(result)
 
-                return@future result
+                    return@future result
+                }
             }
-        }
 
-        return cachedValue.await()
+            return@coroutineScope cachedValue.await()
+        }
     }
 
     override fun makeSongPopular(service: String, id: String, clientInfo: ClientInfo?) {
@@ -385,7 +389,7 @@ abstract class HikariDatabase : IDatabase {
             Unit
         }
 
-        GlobalScope.launch {
+        this.launch {
             while (isActive) {
 //                println("[Condensing Popular Updates]")
                 val updates: MutableMap<String, Int> = HashMap()
@@ -428,7 +432,7 @@ abstract class HikariDatabase : IDatabase {
             }
         }
 
-        GlobalScope.launch {
+        this.launch {
             while (isActive) {
 //                println("[Condensing Location Updates]")
                 val updates: MutableMap<String, String> = HashMap()
@@ -452,7 +456,7 @@ abstract class HikariDatabase : IDatabase {
             }
         }
 
-        GlobalScope.launch(Dispatchers.IO) {
+        this.launch(Dispatchers.IO) {
             use { connection ->
                 val updates: MutableMap<String, String> = HashMap()
                 val insert = connection.prepareStatement("INSERT INTO short_urls (id, params) VALUES (?, ?);")
@@ -483,7 +487,7 @@ abstract class HikariDatabase : IDatabase {
             }
         }
 
-        GlobalScope.launch {
+        this.launch {
             while (isActive) {
 //                println("[Condensing Info Updates]")
                 val updates: MutableMap<String, JukeboxInfo> = HashMap()
