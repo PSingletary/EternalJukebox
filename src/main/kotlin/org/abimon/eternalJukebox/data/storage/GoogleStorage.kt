@@ -20,6 +20,7 @@ import org.abimon.eternalJukebox.objects.EnumStorageType
 import org.abimon.eternalJukebox.redirect
 import org.abimon.visi.io.DataSource
 import org.abimon.visi.io.HTTPDataSource
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.net.URL
@@ -32,26 +33,28 @@ import java.util.*
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kotlin.concurrent.read
 
+@OptIn(DelicateCoroutinesApi::class)
 object GoogleStorage : IStorage {
-    val serviceEmail: String
-    val algorithm: Algorithm
+    private val serviceEmail: String
+    private val algorithm: Algorithm
 
-    val accessTokenLock = ReentrantReadWriteLock()
-    var googleAccessToken: String? = null
+    private val accessTokenLock = ReentrantReadWriteLock()
+    private var googleAccessToken: String? = null
+    @OptIn(ExperimentalCoroutinesApi::class)
     val tokenContext = newSingleThreadContext("Google Storage Token Lock")
 
-    val webClient = WebClient.create(EternalJukebox.vertx)
-    val logger = LoggerFactory.getLogger("GoogleStorage")
+    private val webClient: WebClient = WebClient.create(EternalJukebox.vertx)
+    private val logger: Logger = LoggerFactory.getLogger("GoogleStorage")
 
-    val storageBuckets: Map<EnumStorageType, String>
-    val storageFolderPaths: Map<EnumStorageType, String>
-    val storageSupportsCors: MutableList<EnumStorageType>
+    private val storageBuckets: Map<EnumStorageType, String>
+    private val storageFolderPaths: Map<EnumStorageType, String>
+    private val storageSupportsCors: MutableList<EnumStorageType>
 
-    val publicStorageTypes = arrayOf(
+    private val publicStorageTypes = arrayOf(
+        EnumStorageType.UPLOADED_ANALYSIS,
         EnumStorageType.UPLOADED_AUDIO,
         EnumStorageType.ANALYSIS,
         EnumStorageType.AUDIO,
-        EnumStorageType.EXTERNAL_ANALYSIS,
         EnumStorageType.EXTERNAL_AUDIO
     )
 
@@ -85,7 +88,8 @@ object GoogleStorage : IStorage {
                 name,
                 type,
                 bucket,
-                fullPath
+                fullPath,
+                attempt
             )
             val response = webClient.postAbs(
                     "https://www.googleapis.com/upload/storage/v1/b/$bucket/o?uploadType=media&name=${URLEncoder.encode(
@@ -118,18 +122,11 @@ object GoogleStorage : IStorage {
                     return@exponentiallyBackoff false
                 }
                 401 -> {
-                    if (attempt == 0L)
-                        logger.error(
-                            "[{}] Got back response code 401; reloading token and trying again",
-                            clientInfo?.userUID,
-                            response.bodyAsString()
-                        )
-                    else
-                        logger.error(
-                            "[{}] Got back response code 401 with data {}; reloading token and trying again",
-                            clientInfo?.userUID,
-                            response.bodyAsString()
-                        )
+                    logger.error(
+                        "[{}] Got back response code 401 with data {}; reloading token and trying again",
+                        clientInfo?.userUID,
+                        response.bodyAsString()
+                    )
 
                     reload()
                     return@exponentiallyBackoff true
@@ -416,7 +413,7 @@ object GoogleStorage : IStorage {
             .bearerTokenAuthentication(accessTokenLock.readAwait { googleAccessToken })
             .sendAwait()
 
-        if (publicResponse.statusCode() == 200) {
+        if (privateResponse.statusCode() == 200) {
             if (doesObjectExist(fullPath, bucket, null)) {
                 if (type in publicStorageTypes) {
                     if (makePublic(fullPath, bucket, null))
@@ -432,7 +429,7 @@ object GoogleStorage : IStorage {
         return false
     }
 
-    suspend fun isPublic(path: String, bucket: String): Boolean {
+    private suspend fun isPublic(path: String, bucket: String): Boolean {
         val publicResponse = webClient.headAbs("https://storage.googleapis.com/$bucket/$path")
             .followRedirects(false)
             .sendAwait()
@@ -440,7 +437,7 @@ object GoogleStorage : IStorage {
         return (publicResponse.statusCode() == 200)
     }
 
-    suspend fun makePublic(path: String, bucket: String, clientInfo: ClientInfo?): Boolean {
+    private suspend fun makePublic(path: String, bucket: String, clientInfo: ClientInfo?): Boolean {
         if (isPublic(path, bucket)) return true
 
         var errored = false
@@ -526,7 +523,7 @@ object GoogleStorage : IStorage {
         } && !errored
     }
 
-    suspend fun doesObjectExist(path: String, bucket: String, clientInfo: ClientInfo?): Boolean {
+    private suspend fun doesObjectExist(path: String, bucket: String, clientInfo: ClientInfo?): Boolean {
         var errored = false
 
         val success = exponentiallyBackoff(64000, 8) { attempt ->
@@ -603,7 +600,7 @@ object GoogleStorage : IStorage {
         return success
     }
 
-    suspend fun reload() {
+    private suspend fun reload() {
         accessTokenLock.writeAwait {
             val now = Instant.now().toEpochMilli()
             val token = JWT.create().withIssuer(serviceEmail)
@@ -611,7 +608,7 @@ object GoogleStorage : IStorage {
                 .withAudience("https://www.googleapis.com/oauth2/v4/token")
                 .withExpiresAt(Date(now + 1 * 60 * 60 * 1000))
                 .withIssuedAt(Date(now)).sign(algorithm)
-            var error: Boolean = false
+            var error = false
 
             val success = exponentiallyBackoff(16000, 8) { attempt ->
                 logger.trace("Attempting to reload Google Storage token; Attempt {}", attempt)
@@ -691,17 +688,15 @@ object GoogleStorage : IStorage {
 
         val defaultBucket = storageOptions["DEFAULT_BUCKET"]?.toString()
 
-        storageBuckets = EnumStorageType.values()
+        storageBuckets = EnumStorageType.entries
             .map { type ->
                 type to (EternalJukebox.config.storageOptions["${type.name}_BUCKET"] as? String ?: defaultBucket)
             }
             .filter { ab -> ab.second != null }
-            .map { (a, b) -> a to b!! }
-            .toMap()
+            .associate { (a, b) -> a to b!! }
 
-        storageFolderPaths = EnumStorageType.values()
-            .map { type -> type to (EternalJukebox.config.storageOptions["${type.name}_FOLDER"] as? String ?: "") }
-            .toMap()
+        storageFolderPaths = EnumStorageType.entries
+            .associateWith { type -> (EternalJukebox.config.storageOptions["${type.name}_FOLDER"] as? String ?: "") }
 
 
         storageSupportsCors = ArrayList()
@@ -712,7 +707,7 @@ object GoogleStorage : IStorage {
             val corsTypes =
                 publicStorageTypes.map { storageType -> Pair(storageType, storageBuckets[storageType]) }
                     .distinctBy(Pair<EnumStorageType, String?>::second)
-                    .filter { (storageType, bucket) ->
+                    .filter { (_, bucket) ->
                         if (bucket == null) return@filter false
 
                         var errored = false
@@ -787,7 +782,7 @@ object GoogleStorage : IStorage {
     }
 
 
-    suspend inline fun <T> ReentrantReadWriteLock.readAwait(crossinline action: suspend () -> T): T =
+    private suspend inline fun <T> ReentrantReadWriteLock.readAwait(crossinline action: suspend () -> T): T =
         withContext(tokenContext) {
             val rl = readLock()
             rl.lock()
@@ -798,7 +793,7 @@ object GoogleStorage : IStorage {
             }
         }
 
-    suspend inline fun <T> ReentrantReadWriteLock.writeAwait(crossinline action: suspend () -> T): T =
+    private suspend inline fun <T> ReentrantReadWriteLock.writeAwait(crossinline action: suspend () -> T): T =
         withContext(tokenContext) {
             val rl = readLock()
 

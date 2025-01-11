@@ -1,14 +1,8 @@
-# The base domain
-baseDomain: <domain>
 # What port we're running on
 port: <port>
 # Spotify Client / Secret; make an application over here: https://developer.spotify.com/my-applications/
 spotifyClient: <spotifyClient>
 spotifySecret: <spotifySecret>
-
-# Only needed if you're doing oauth logins
-googleClient: <googleClient>
-googleSecret: <googleSecret>
 
 # These can be any folders you want
 storageType: LOCAL
@@ -17,6 +11,7 @@ storageOptions:
   AUDIO_FOLDER: data/audio
   EXTERNAL_AUDIO_FOLDER: data/external_audio
   UPLOADED_AUDIO_FOLDER: data/uploaded_audio
+  UPLOADED_ANALYSIS_FOLDER: data/uploaded_analysis
   PROFILE_FOLDER: data/profile
   LOG_FOLDER: data/log
 

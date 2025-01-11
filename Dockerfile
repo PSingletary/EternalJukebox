@@ -1,21 +1,20 @@
 # set up the main image with dependencies first, to avoid re-doing this after each build
-FROM adoptopenjdk:8-jdk-hotspot as deps
+FROM amazoncorretto:11-alpine as deps
 
 WORKDIR /EternalJukebox
 
-RUN curl -L https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -o /usr/local/bin/yt-dlp \
-    && chmod a+rx /usr/local/bin/yt-dlp \
-    && apt-get update \
-    && apt-get install ffmpeg gettext python3 -y \
-    && apt-get clean \
+RUN wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /usr/local/bin/yt-dlp \
+    && chmod a+rx /usr/local/bin/yt-dlp
+
+RUN apk update \
+    && apk add ffmpeg gettext python3 \
     && touch hikari.properties
 
 # build jar with gradle
 
-FROM gradle:jdk8 as gradle-build
+FROM gradle:8-jdk11 as gradle-build
 
 WORKDIR /home/gradle/project
-
 
 # Only copy dependency-related files
 COPY build.gradle gradle.propertie* settings.gradle ./EternalJukebox/
@@ -26,12 +25,13 @@ RUN gradle clean shadowJar --no-daemon > /dev/null 2>&1 || true
 
 COPY . ./EternalJukebox
 
-RUN  cd EternalJukebox\
-     && gradle clean shadowJar --no-daemon
+WORKDIR /home/gradle/project/EternalJukebox
+
+RUN gradle clean shadowJar --no-daemon
 
 # build web with jekyll
 
-FROM jekyll/jekyll:stable as jekyll-build
+FROM rockstorm/jekyll:latest as jekyll-build
 
 WORKDIR /EternalJukebox
 
@@ -49,4 +49,4 @@ COPY --from=gradle-build /home/gradle/project/EternalJukebox/build/libs/* ./
 # envsubst is used so environment variables can be used instead of a config file
 
 CMD envsubst < "/EternalJukebox/envvar_config.yaml" > "/EternalJukebox/config.yaml"\
-    && java -jar EternalJukebox.jar
+    && java -jar EternalJukebox-all.jar
