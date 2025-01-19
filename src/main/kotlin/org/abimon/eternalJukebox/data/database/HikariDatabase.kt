@@ -389,7 +389,7 @@ abstract class HikariDatabase : IDatabase, CoroutineScope {
             Unit
         }
 
-        this.launch {
+        launch {
             while (isActive) {
 //                println("[Condensing Popular Updates]")
                 val updates: MutableMap<String, Int> = HashMap()
@@ -432,7 +432,7 @@ abstract class HikariDatabase : IDatabase, CoroutineScope {
             }
         }
 
-        this.launch {
+        launch {
             while (isActive) {
 //                println("[Condensing Location Updates]")
                 val updates: MutableMap<String, String> = HashMap()
@@ -456,7 +456,7 @@ abstract class HikariDatabase : IDatabase, CoroutineScope {
             }
         }
 
-        this.launch(Dispatchers.IO) {
+        launch(Dispatchers.IO) {
             use { connection ->
                 val updates: MutableMap<String, String> = HashMap()
                 val insert = connection.prepareStatement("INSERT INTO short_urls (id, params) VALUES (?, ?);")
@@ -487,7 +487,7 @@ abstract class HikariDatabase : IDatabase, CoroutineScope {
             }
         }
 
-        this.launch {
+        launch {
             while (isActive) {
 //                println("[Condensing Info Updates]")
                 val updates: MutableMap<String, JukeboxInfo> = HashMap()

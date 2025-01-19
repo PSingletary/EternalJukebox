@@ -14,7 +14,6 @@ import java.io.PrintStream
 import java.util.*
 import kotlin.coroutines.CoroutineContext
 
-@OptIn(DelicateCoroutinesApi::class)
 object LocalAnalyticStorage : IAnalyticsStorage, CoroutineScope {
     override val coroutineContext: CoroutineContext = SupervisorJob(EternalJukebox.coroutineContext[Job]) + CoroutineName("LocalAnalyticStorage")
 
