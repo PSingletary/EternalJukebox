@@ -12,18 +12,13 @@ import io.vertx.kotlin.ext.web.client.sendBufferAwait
 import io.vertx.kotlin.ext.web.client.sendFormAwait
 import io.vertx.kotlin.ext.web.client.sendJsonAwait
 import kotlinx.coroutines.*
-import org.abimon.eternalJukebox.BufferDataSource
-import org.abimon.eternalJukebox.EternalJukebox
-import org.abimon.eternalJukebox.exponentiallyBackoff
+import org.abimon.eternalJukebox.*
 import org.abimon.eternalJukebox.objects.ClientInfo
 import org.abimon.eternalJukebox.objects.EnumStorageType
-import org.abimon.eternalJukebox.redirect
 import org.abimon.visi.io.DataSource
-import org.abimon.visi.io.HTTPDataSource
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
-import java.net.URL
 import java.net.URLEncoder
 import java.security.KeyFactory
 import java.security.interfaces.RSAPrivateKey
@@ -46,7 +41,7 @@ object GoogleStorage : IStorage {
     val tokenContext = newSingleThreadContext("Google Storage Token Lock")
 
     private val webClient: WebClient = WebClient.create(EternalJukebox.vertx)
-    private val logger: Logger = LoggerFactory.getLogger("GoogleStorage")
+    override val logger: Logger = LoggerFactory.getLogger("GoogleStorage")
 
     private val storageBuckets: Map<EnumStorageType, String>
     private val storageFolderPaths: Map<EnumStorageType, String>
@@ -166,119 +161,10 @@ object GoogleStorage : IStorage {
         return success
     }
 
-    override suspend fun provide(name: String, type: EnumStorageType, clientInfo: ClientInfo?): DataSource? {
-        val bucket = storageBuckets.getValue(type)
-        val fullPath = buildString {
-            append(storageFolderPaths[type] ?: "")
-            append(name)
-        }
-
-        if (isPublic(fullPath, bucket))
-            return HTTPDataSource(URL("https://storage.googleapis.com/$bucket/$fullPath"))
-
-        if (doesObjectExist(fullPath, bucket, clientInfo)) {
-            if (type in publicStorageTypes) {
-                if (makePublic(fullPath, bucket, null)) {
-                    logger.trace("Made {} public in {}", fullPath, bucket)
-                    return HTTPDataSource(URL("https://storage.googleapis.com/$bucket/$fullPath"))
-                } else
-                    logger.trace("Failed to make {} public in {}", fullPath, bucket)
-            }
-
-            var data: Buffer? = null
-
-            val success = exponentiallyBackoff(64000, 8) { attempt ->
-                logger.trace(
-                    "[{}] Attempting to download and stream gs://{}/{} exists; Attempt {}",
-                    clientInfo?.userUID,
-                    bucket,
-                    fullPath,
-                    attempt
-                )
-                val response = webClient.getAbs(
-                        "https://www.googleapis.com/storage/v1/b/$bucket/o/${URLEncoder.encode(
-                            fullPath,
-                            "UTF-8"
-                        )}?alt=media"
-                    )
-                    .bearerTokenAuthentication(accessTokenLock.readAwait { googleAccessToken })
-                    .sendAwait()
-
-                when (response.statusCode()) {
-                    200 -> {
-                        data = response.body()
-                        return@exponentiallyBackoff false
-                    }
-                    400 -> {
-                        logger.error(
-                            "[{}] Got back response code 400 with data {}; returning",
-                            clientInfo?.userUID,
-                            response.bodyAsString()
-                        )
-                        data = null
-                        return@exponentiallyBackoff false
-                    }
-                    401 -> {
-                        if (attempt == 0L) {
-                            logger.error(
-                                "[{}] Got back response code 401; reloading token and trying again",
-                                clientInfo?.userUID
-                            )
-                            reload()
-                            return@exponentiallyBackoff true
-                        } else {
-                            logger.error(
-                                "[{}] Got back response code 401 with data {}; returning.",
-                                clientInfo?.userUID,
-                                response.bodyAsString()
-                            )
-                            data = null
-                            return@exponentiallyBackoff false
-                        }
-                    }
-                    403 -> {
-                        logger.error(
-                            "[{}] Got back response code 403 with data {}; returning",
-                            clientInfo?.userUID,
-                            response.bodyAsString()
-                        )
-                        data = null
-                        return@exponentiallyBackoff false
-                    }
-                    404 -> {
-                        logger.error(
-                            "[{}] Got back response code 404 with data {}; That is *really* bad; returning",
-                            clientInfo?.userUID,
-                            response.bodyAsString()
-                        )
-                        data = null
-                        return@exponentiallyBackoff false
-                    }
-                    else -> {
-                        logger.warn(
-                            "[{}] Got back response code {} with data {}; backing off and trying again",
-                            clientInfo?.userUID,
-                            response.statusCode(),
-                            response.bodyAsString()
-                        )
-                        return@exponentiallyBackoff true
-                    }
-                }
-            } && data != null
-
-            if (success)
-                return BufferDataSource(data!!)
-            return null
-        }
-
-        return null
-    }
-
     override suspend fun provide(
         name: String,
         type: EnumStorageType,
         context: RoutingContext,
-        clientInfo: ClientInfo?
     ): Boolean {
         val bucket = storageBuckets.getValue(type)
         val fullPath = buildString {
@@ -291,7 +177,7 @@ object GoogleStorage : IStorage {
             return true
         }
 
-        if (doesObjectExist(fullPath, bucket, clientInfo)) {
+        if (doesObjectExist(fullPath, bucket, context.clientInfo)) {
             if (type in publicStorageTypes) {
                 if (makePublic(fullPath, bucket, null)) {
                     logger.trace("Made {} public in {}", fullPath, bucket)
@@ -306,7 +192,7 @@ object GoogleStorage : IStorage {
             val success = exponentiallyBackoff(64000, 8) { attempt ->
                 logger.trace(
                     "[{}] Attempting to download and stream gs://{}/{} exists; Attempt {}",
-                    clientInfo?.userUID,
+                    context.clientInfo.userUID,
                     bucket,
                     fullPath,
                     attempt
@@ -328,7 +214,7 @@ object GoogleStorage : IStorage {
                     400 -> {
                         logger.error(
                             "[{}] Got back response code 400 with data {}; returning",
-                            clientInfo?.userUID,
+                            context.clientInfo.userUID,
                             localResponse.bodyAsString()
                         )
                         response = null
@@ -338,14 +224,14 @@ object GoogleStorage : IStorage {
                         if (attempt == 0L) {
                             logger.error(
                                 "[{}] Got back response code 401; reloading token and trying again",
-                                clientInfo?.userUID
+                                context.clientInfo.userUID,
                             )
                             reload()
                             return@exponentiallyBackoff true
                         } else {
                             logger.error(
                                 "[{}] Got back response code 401 with data {}; returning.",
-                                clientInfo?.userUID,
+                                context.clientInfo.userUID,
                                 localResponse.bodyAsString()
                             )
                             response = null
@@ -355,7 +241,7 @@ object GoogleStorage : IStorage {
                     403 -> {
                         logger.error(
                             "[{}] Got back response code 403 with data {}; returning",
-                            clientInfo?.userUID,
+                            context.clientInfo.userUID,
                             localResponse.bodyAsString()
                         )
                         response = null
@@ -364,7 +250,7 @@ object GoogleStorage : IStorage {
                     404 -> {
                         logger.error(
                             "[{}] Got back response code 404 with data {}; That is *really* bad; returning",
-                            clientInfo?.userUID,
+                            context.clientInfo.userUID,
                             localResponse.bodyAsString()
                         )
                         response = null
@@ -373,7 +259,7 @@ object GoogleStorage : IStorage {
                     else -> {
                         logger.warn(
                             "[{}] Got back response code {} with data {}; backing off and trying again",
-                            clientInfo?.userUID,
+                            context.clientInfo.userUID,
                             localResponse.statusCode(),
                             localResponse.bodyAsString()
                         )
