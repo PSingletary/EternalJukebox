@@ -1,35 +1,43 @@
 package org.abimon.eternalJukebox.data.storage
 
 import io.vertx.ext.web.RoutingContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.abimon.eternalJukebox.EternalJukebox
+import org.abimon.eternalJukebox.clientInfo
 import org.abimon.eternalJukebox.objects.ClientInfo
 import org.abimon.eternalJukebox.objects.EnumStorageType
 import org.abimon.visi.io.DataSource
-import org.abimon.visi.io.FileDataSource
 import java.io.File
 import java.io.FileOutputStream
+import java.util.*
 
 object LocalStorage : IStorage {
-    val storageLocations: Map<EnumStorageType, File> = EnumStorageType.values().map { type -> type to File(EternalJukebox.config.storageOptions["${type.name}_FOLDER"] as? String ?: type.name.toLowerCase()) }.toMap()
+    private val storageLocations: Map<EnumStorageType, File> = EnumStorageType.entries.associateWith { type ->
+        File(
+            EternalJukebox.config.storageOptions["${type.name}_FOLDER"] as? String
+                ?: type.name.lowercase(Locale.getDefault())
+        )
+    }
 
     override fun shouldStore(type: EnumStorageType): Boolean = !disabledStorageTypes.contains(type)
 
     override suspend fun store(name: String, type: EnumStorageType, data: DataSource, mimeType: String, clientInfo: ClientInfo?): Boolean {
-        FileOutputStream(File(storageLocations[type]!!, name)).use { fos -> data.use { inputStream -> inputStream.copyTo(fos) } }
-        return true
+        return withContext(Dispatchers.IO) {
+            val file = File(storageLocations[type]!!, name)
+            FileOutputStream(file).use { fos ->
+                data.use { inputStream ->
+                    inputStream.copyTo(fos)
+                }
+            }
+            true
+        }
     }
 
-    override suspend fun provide(name: String, type: EnumStorageType, clientInfo: ClientInfo?): DataSource? {
-        val file = File(storageLocations[type]!!, name)
-        if(file.exists())
-            return FileDataSource(file)
-        return null
-    }
-
-    override suspend fun provide(name: String, type: EnumStorageType, context: RoutingContext, clientInfo: ClientInfo?): Boolean {
+    override suspend fun provide(name: String, type: EnumStorageType, context: RoutingContext): Boolean {
         val file = File(storageLocations[type]!!, name)
         if(file.exists()) {
-            context.response().putHeader("X-Client-UID", clientInfo?.userUID ?: "N/a").sendFile(file.absolutePath)
+            context.response().putHeader("X-Client-UID", context.clientInfo.userUID).sendFile(file.absolutePath)
             return true
         }
 

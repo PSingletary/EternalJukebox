@@ -92,7 +92,6 @@ hr {
 
 
 #info {
-    margin-left: 20px;
     margin-top: 10px;
     margin-bottom:10px;
     min-height:28px;
@@ -164,8 +163,12 @@ hr {
     text-align:left;
 }
 
-.song-link:hover {
-    cursor:pointer;
+.song-link.song-link { /* also overwrites hover, focus, active */
+    color: inherit;
+    text-decoration: inherit;
+    font-weight: inherit;
+    display: list-item;
+    width: fit-content;
 }
 
 a {
@@ -354,6 +357,30 @@ a:link {text-decoration: none; }
     text-align:left;
     font-weight:bold;
     margin-bottom:10px;
+}
+
+#audio-offset-div {
+    margin-top: 20px;
+}
+
+#saudio-offset {
+    text-align:left;
+    font-weight:bold;
+    margin-bottom:10px;
+    width: 300px;
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+}
+
+#saudio-offset > span {
+    flex: 1;
+    white-space: nowrap;
+}
+
+#saudio-offset > input {
+    flex: 0 1 auto;
+    min-width: 0;
 }
 
 

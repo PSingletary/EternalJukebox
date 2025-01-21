@@ -6,12 +6,11 @@ buttons:
      id: go
    - name: Tune
      id: tune
-   - name: Star
-     id: star
    - name: Short URL
      id: short-url
    - name: Original Audio Source
      id: og-audio-source
+     link: true
 ---
 
 <div id='info-div'>
@@ -19,6 +18,7 @@ buttons:
     {% include tweet.html %}
 </div>
 
+{% include manual_analysis.html %}
 <div id='error'></div>
 <div id="hero">
     <div id="stats">
@@ -27,9 +27,13 @@ buttons:
             <br>
             <span id="button-panel">
                 {% for item in layout.buttons %}
-                  <button class="btn btn-small btn-default" id="{{ item.id }}">{{ item.name }}</button>
+                    {% if item.link %}
+                        <a class="btn btn-small btn-default" role="button" id="{{ item.id }}">{{ item.name }}</a>
+                    {% else %}
+                        <button class="btn btn-small btn-default" id="{{ item.id }}">{{ item.name }}</button>
+                    {% endif %}
                 {% endfor %}
-                {% if page.app == 'jukebox' %}<button class="btn btn-small btn-default" id="canonize">Auto Canonizer Version</button>{% elsif page.app == 'canonizer' %}<button class="btn btn-small btn-default" id="jukebox">Eternal Jukebox Version</button>{% endif %}
+                {% if page.app == 'jukebox' %}<a class="btn btn-small btn-default" role="button" id="canonize">Auto Canonizer Version</a>{% elsif page.app == 'canonizer' %}<a class="btn btn-small btn-default" role="button" id="jukebox">Eternal Jukebox Version</a>{% endif %}
             </span>
         </div>
         {{ content }}
@@ -102,7 +106,18 @@ buttons:
             <div class="l-cb" id="l-sequential-branch"> Remove sequential branches: <input id="sequential-branch"
                                                                                            type="checkbox"></div>
             <div class="l-cb" id="l-disable-keys"> Disable Keypresses: <input id="disable-keys" type="checkbox"></div>
-            <div class="l-cb" id="l-audio-url">Audio URL: <input id="audio-url" type="url"></div>
+            <div class="l-cb" id="l-audio-url">Audio URL: <input id="audio-url" type="text" inputmode="url" enterkeyhint="go"></div>
+            <div id="audio-offset-div">
+                <div id="saudio-offset"><span> Audio offset in seconds:&nbsp; </span><input id="audio-offset" type="number" value="0" step="any"/></div>
+
+                <div class="slider ui-slider ui-slider-horizontal ui-widget ui-widget-content ui-corner-all"
+                    id="audio-offset-slider"><a class="ui-slider-handle ui-state-default ui-corner-all" href="#"
+                    style="left: 35.8974%;"></a></div>
+                <div id="slider-labels">
+                    <span class="left-label"> -10 s </span>
+                    <span class="right-label"> 20 s </span>
+                </div>
+            </div>
             <br>
             <div class="l-cb" id="l-audio-upload">
                 <form id="audio-upload-form">
@@ -128,6 +143,7 @@ buttons:
                 <div id="l-branch-chance"> Branch chance (%): <span class="ti-val" id="branch-chance">18</span></div>
                 <div id="l-branch-threshold"> Last threshold: <span class="ti-val" id="last-threshold">0</span></div>
                 <br>
+                <div id="l-song-length"> Song length: <span class="ti-val" id="song-length"></span></div>
                 <div id="l-beat-count"> Total beats: <span class="ti-val" id="total-beats"></span></div>
                 <div id="l-branch-count"> Total branches: <span class="ti-val" id="branch-count"></span></div>
                 <div id="l-loop-length-beats"> Longest loop (beats): <span class="ti-val" id="loop-length-beats"></span>
@@ -155,10 +171,15 @@ buttons:
             <div id="control-instructions">
                 You can retune the Auto Canonizer to use a different audio track here.
             </div>
-            <div class="l-cb" id="l-audio-url">Audio URL: <input id="audio-url" type="url"></div>
+            <div class="l-cb" id="l-audio-url">Audio URL: <input id="audio-url" type="text" inputmode="url" enterkeyhint="go"></div>
             <br>
-            <div class="l-cb" id="l-audio-upload"><form id="audio-upload-form"><input id="audio-upload" type="file" name="song_upload"
-                                                                                      accept="audio/*"></form></div>
+            <div class="l-cb" id="l-audio-upload">
+                <form id="audio-upload-form">
+                    <input id="audio-upload" type="file" name="song_upload" accept="audio/*">
+                </form>
+                <div class='progress_outer' id="audio-progress" style="background-color: green;">
+                    <div id='_progress' class='progress'></div>
+                </div></div>
             <button class="btn btn-small" id="reset-edges"> Reset</button>
         </div>
     </div>
