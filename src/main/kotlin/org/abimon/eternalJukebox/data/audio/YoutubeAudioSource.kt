@@ -1,5 +1,6 @@
 package org.abimon.eternalJukebox.data.audio
 
+import com.fasterxml.jackson.databind.DatabindException
 import com.github.kittinunf.fuel.Fuel
 import io.vertx.ext.web.RoutingContext
 import kotlinx.coroutines.*
@@ -23,7 +24,12 @@ import kotlin.coroutines.CoroutineContext
 import kotlin.math.abs
 
 object YoutubeAudioSource : IAudioSource, CoroutineScope {
-    override val coroutineContext: CoroutineContext = SupervisorJob(EternalJukebox.coroutineContext[Job]) + CoroutineName("YoutubeAudioSource")
+    private val logger: Logger = LoggerFactory.getLogger("YoutubeAudioSource")
+
+    override val coroutineContext: CoroutineContext =
+        SupervisorJob(EternalJukebox.coroutineContext[Job]) +
+                CoroutineName("YoutubeAudioSource") +
+                LogCoroutineExceptionHandler(logger)
 
     @Suppress("JoinDeclarationAndAssignment")
     private val apiKey: String?
@@ -31,8 +37,6 @@ object YoutubeAudioSource : IAudioSource, CoroutineScope {
         get() = UUID.randomUUID().toString()
     val format: String
     val command: List<String>
-
-    private val logger: Logger = LoggerFactory.getLogger("YoutubeAudioSource")
 
     private val newPipeService = ServiceList.YouTube
     val mimes = mapOf(
@@ -64,13 +68,15 @@ object YoutubeAudioSource : IAudioSource, CoroutineScope {
         }
 
         if (apiKey != null && hitQuota.get() == -1L) {
-            val foundVideoIds = getSearchItemsFromApiSearch(queryText).map { it.id.videoId }
-            val videoDetails = if (foundVideoIds.isNotEmpty()) {
-                getMultiContentDetailsWithKey(foundVideoIds)
-            } else emptyList()
+            val foundVideoIds = getSearchItemsFromApiSearch(queryText, context.clientInfo.userUID).mapNotNull { it.id.videoId }
+            if (foundVideoIds.isNotEmpty()) {
+                val videoDetails = getMultiContentDetailsWithKey(foundVideoIds, context.clientInfo.userUID)
 
-            videoDetails.minByOrNull { abs(info.duration - it.contentDetails.duration.toMillis()) }
-                ?.let { youTubeUrl = VIDEO_LINK_PREFIX + it.id } ?: run {
+                videoDetails.minByOrNull { abs(info.duration - it.contentDetails.duration.toMillis()) }
+                    ?.let { youTubeUrl = "${VIDEO_LINK_PREFIX}${it.id}" }
+            }
+
+            if (youTubeUrl == null) {
                 logger.warn("[${context.clientInfo.userUID}] Searches for \"$queryText\" using YouTube Data API v3 turned up nothing")
             }
         }
@@ -124,12 +130,23 @@ object YoutubeAudioSource : IAudioSource, CoroutineScope {
 
                 if (MediaWrapper.ffmpeg.installed) {
                     if (withContext(Dispatchers.IO) { !MediaWrapper.ffmpeg.convert(tmpFile, endGoalTmp, ffmpegLog) }) {
-                        logger.error("[{}] Failed to convert {} to {}. Check {}", context.clientInfo.userUID, tmpFile, endGoalTmp, ffmpegLog.name)
+                        logger.error(
+                            "[{}] Failed to convert {} to {}. Check {}",
+                            context.clientInfo.userUID,
+                            tmpFile,
+                            endGoalTmp,
+                            ffmpegLog.name
+                        )
                         return false
                     }
 
                     if (!endGoalTmp.exists()) {
-                        logger.error("[{}] {} does not exist, check {}", context.clientInfo.userUID, endGoalTmp, ffmpegLog.name)
+                        logger.error(
+                            "[{}] {} does not exist, check {}",
+                            context.clientInfo.userUID,
+                            endGoalTmp,
+                            ffmpegLog.name
+                        )
                         return false
                     }
                 } else {
@@ -200,7 +217,7 @@ object YoutubeAudioSource : IAudioSource, CoroutineScope {
         return null
     }
 
-    private fun getMultiContentDetailsWithKey(ids: List<String>): List<YoutubeContentItem> {
+    private fun getMultiContentDetailsWithKey(ids: List<String>, userUID: String? = null): List<YoutubeContentItem> {
         val (result, error) = Fuel.get(
             "https://www.googleapis.com/youtube/v3/videos", listOf(
                 "part" to "contentDetails,snippet",
@@ -219,10 +236,15 @@ object YoutubeAudioSource : IAudioSource, CoroutineScope {
             return emptyList()
         }
 
-        return EternalJukebox.jsonMapper.readValue(result, YoutubeContentResults::class.java).items
+        try {
+            return EternalJukebox.jsonMapper.readValue(result, YoutubeContentResults::class.java).items
+        } catch (de: DatabindException) {
+            logger.error("[{}] Failed to parse multi-content details from YouTube Data API v3", userUID, de)
+            return emptyList()
+        }
     }
 
-    private fun getSearchItemsFromApiSearch(query: String): List<YoutubeSearchItem> {
+    private fun getSearchItemsFromApiSearch(query: String, userUID: String? = null): List<YoutubeSearchItem> {
         val (result, error) = Fuel.get(
             "https://www.googleapis.com/youtube/v3/search", listOf(
                 "part" to "snippet",
@@ -244,7 +266,12 @@ object YoutubeAudioSource : IAudioSource, CoroutineScope {
             return emptyList()
         }
 
-        return EternalJukebox.jsonMapper.readValue(result, YoutubeSearchResults::class.java).items
+        try {
+            return EternalJukebox.jsonMapper.readValue(result, YoutubeSearchResults::class.java).items
+        } catch (de: DatabindException) {
+            logger.error("[{}] Failed to parse search results from YouTube Data API v3", userUID, de)
+            return emptyList()
+        }
     }
 
     private fun getInfoItemsFromNewPipeSearch(query: String): List<StreamInfoItem> {
@@ -271,9 +298,10 @@ object YoutubeAudioSource : IAudioSource, CoroutineScope {
                     newPipeService,
                     searchQuery, nextPage
                 )
-                infoItems.addAll(moreItems.items
-                    .filterIsInstance<StreamInfoItem>()
-                    .filter { it.streamType == StreamType.VIDEO_STREAM })
+                infoItems.addAll(
+                    moreItems.items
+                        .filterIsInstance<StreamInfoItem>()
+                        .filter { it.streamType == StreamType.VIDEO_STREAM })
                 nextPage = moreItems.nextPage
             }
         } catch (e: Exception) {

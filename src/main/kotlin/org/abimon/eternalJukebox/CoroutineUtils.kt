@@ -1,6 +1,7 @@
 package org.abimon.eternalJukebox
 
 import kotlinx.coroutines.CoroutineExceptionHandler
+import org.slf4j.Logger
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
@@ -16,3 +17,9 @@ public inline fun NamedCoroutineExceptionHandler(name: String, crossinline handl
 
         override fun toString(): String = name
     }
+
+data class LogCoroutineExceptionHandler(val logger: Logger) : AbstractCoroutineContextElement(CoroutineExceptionHandler), CoroutineExceptionHandler {
+    override fun handleException(context: CoroutineContext, exception: Throwable) {
+        logger.error("[$context] An unhandled exception occurred", exception)
+    }
+}

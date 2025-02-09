@@ -13,7 +13,6 @@ import io.vertx.core.Vertx
 import io.vertx.core.VertxOptions
 import io.vertx.core.http.HttpServer
 import io.vertx.ext.web.Router
-import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineName
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.SupervisorJob
@@ -43,10 +42,10 @@ import java.util.concurrent.TimeUnit
 import kotlin.reflect.jvm.jvmName
 
 object EternalJukebox : CoroutineScope {
+    private val logger: Logger = LoggerFactory.getLogger("EternalBox")
+
     // `SupervisorJob` means this won't be canceled
-    override val coroutineContext = SupervisorJob() + CoroutineName("EternalJukebox") + NamedCoroutineExceptionHandler("LogExceptionHandler") { ctx, exception ->
-        logger.error("[$ctx] An unhandled exception occurred", exception)
-    }
+    override val coroutineContext = SupervisorJob() + CoroutineName("EternalJukebox") + LogCoroutineExceptionHandler(logger)
 
     val jsonMapper: ObjectMapper = ObjectMapper()
             .registerModules(Jdk8Module(), KotlinModule.Builder().build(), JavaTimeModule(), ParameterNamesModule())
@@ -79,8 +78,6 @@ object EternalJukebox : CoroutineScope {
     val analyticsProviders: List<IAnalyticsProvider>
 
     val database: IDatabase
-
-    private val logger: Logger = LoggerFactory.getLogger("EternalBox")
 
     private val schedule: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private val apis = ArrayList<IAPI>()
