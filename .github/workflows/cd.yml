@@ -12,7 +12,7 @@ jobs:
     name: Generate changelog
     runs-on: ubuntu-22.04
     outputs:
-      changelog_body: ${{ steps.read_changelog.outputs.CHANGELOG_BODY }}
+      changelog_body: ${{ steps.git-cliff.outputs.content }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,28 +23,9 @@ jobs:
         id: git-cliff
         with:
           config: cliff.toml
-          args: --latest --no-exec --github-repo ${{ github.repository }}
+          args: -vv --latest --no-exec --github-repo ${{ github.repository }}
         env:
-          OUTPUT: CHANGELOG.md
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Commit
-        run: |
-          git checkout ${{ github.ref_name }}
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          set +e
-          git add CHANGELOG.md
-          git commit -m "core(release): Prepare ${{ github.ref_name }}"
-          git push
-      - name: Read CHANGELOG.md
-        id: read_changelog
-        shell: bash
-        run: |
-          r=$(cat CHANGELOG.md)                               # <--- Read release.md (Provide correct path as per your repo)
-          r="${r//'%'/'%25'}"                                 # Multiline escape sequences for %
-          r="${r//$'\n'/'%0A'}"                               # Multiline escape sequences for '\n'
-          r="${r//$'\r'/'%0D'}"                               # Multiline escape sequences for '\r'
-          echo "CHANGELOG_BODY=$r" >> $GITHUB_OUTPUT          # <--- Set environment variable
 
   publish:
     name: Build and publish shadowJar
