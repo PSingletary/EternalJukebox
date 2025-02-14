@@ -19,7 +19,7 @@ data class YoutubePageInfo(
 
 data class YoutubeID(
         val kind: String,
-        val videoId: String
+        val videoId: String? = null
 )
 
 data class YoutubeVideoThumbnail(

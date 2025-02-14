@@ -6,6 +6,7 @@ import com.github.kittinunf.fuel.coroutines.awaitStringResponseResult
 import io.vertx.core.json.JsonObject
 import kotlinx.coroutines.*
 import org.abimon.eternalJukebox.EternalJukebox
+import org.abimon.eternalJukebox.LogCoroutineExceptionHandler
 import org.abimon.eternalJukebox.bearer
 import org.abimon.eternalJukebox.exponentiallyBackoff
 import org.abimon.eternalJukebox.objects.ClientInfo
@@ -16,11 +17,14 @@ import org.slf4j.LoggerFactory
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.CoroutineContext
 
-@OptIn(DelicateCoroutinesApi::class)
 object SpotifyAnalyser : IAnalyser, CoroutineScope {
-    override val coroutineContext: CoroutineContext = SupervisorJob(EternalJukebox.coroutineContext[Job]) + CoroutineName("Spotify Analyser")
-    private val token: AtomicReference<String> = AtomicReference("")
     private val logger: Logger = LoggerFactory.getLogger("SpotifyAnalyser")
+
+    override val coroutineContext: CoroutineContext = SupervisorJob(EternalJukebox.coroutineContext[Job]) +
+            CoroutineName("Spotify Analyser") +
+            LogCoroutineExceptionHandler(logger)
+
+    private val token: AtomicReference<String> = AtomicReference("")
 
     override suspend fun search(query: String, clientInfo: ClientInfo?): Array<JukeboxInfo> {
         var error: SpotifyError? = null
@@ -56,6 +60,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                     }
                     return@exponentiallyBackoff false
                 }
+
                 400 -> {
                     if (((mapResponse["error"] as Map<*, *>)["message"] as String) == "Only valid bearer authentication supported") {
                         logger.warn(
@@ -74,6 +79,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                         return@exponentiallyBackoff false
                     }
                 }
+
                 401 -> {
                     if (logger.isErrorEnabled) logger.error(
                         "[{}] Got back response code 401  with data \"{}\"; reloading token, backing off, and trying again",
@@ -83,6 +89,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                     reload()
                     return@exponentiallyBackoff true
                 }
+
                 429 -> {
                     val backoff = response.header("Retry-After").firstOrNull()?.toIntOrNull() ?: 4
                     logger.warn(
@@ -92,6 +99,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                     delay(backoff * 1000L)
                     return@exponentiallyBackoff true
                 }
+
                 else -> {
                     if (logger.isErrorEnabled) logger.error(
                         "[{}] Got back response code {} with data \"{}\"; backing off and trying again",
@@ -135,6 +143,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                     )
                     return@exponentiallyBackoff false
                 }
+
                 400 -> {
                     if (((mapResponse["error"] as Map<*, *>)["message"] as String) == "Only valid bearer authentication supported") {
                         logger.error(
@@ -153,6 +162,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                         return@exponentiallyBackoff false
                     }
                 }
+
                 401 -> {
                     logger.error(
                         "[{}] Got back response code 401 with data \"{}\"; reloading token, backing off, and trying again",
@@ -162,6 +172,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                     reload()
                     return@exponentiallyBackoff true
                 }
+
                 429 -> {
                     val backoff = response.header("Retry-After").firstOrNull()?.toIntOrNull() ?: 4
                     logger.warn(
@@ -172,6 +183,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                     delay(backoff * 1000L)
                     return@exponentiallyBackoff true
                 }
+
                 else -> {
                     logger.warn(
                         "[{}] Got back response code {} with data \"{}\"; backing off and trying again",
@@ -197,8 +209,10 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
         val success = exponentiallyBackoff(64000, 8) { attempt ->
             logger.trace("Attempting to reload Spotify Token; Attempt {}", attempt)
             val (_, response, _) =
-                Fuel.post("https://accounts.spotify.com/api/token").header("Content-Type", "application/x-www-form-urlencoded").body("grant_type=client_credentials")
-                    .authentication().basic(EternalJukebox.config.spotifyClient
+                Fuel.post("https://accounts.spotify.com/api/token")
+                    .header("Content-Type", "application/x-www-form-urlencoded").body("grant_type=client_credentials")
+                    .authentication().basic(
+                        EternalJukebox.config.spotifyClient
                         ?: run {
                             error = SpotifyError.NO_AUTH_DETAILS
                             return@exponentiallyBackoff false
@@ -212,6 +226,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                     token.set(JsonObject(String(response.data, Charsets.UTF_8)).getString("access_token"))
                     return@exponentiallyBackoff false
                 }
+
                 400 -> {
                     logger.error(
                         "Got back response code 400 with data \"{}\"; returning INVALID_AUTH_DETAILS",
@@ -220,6 +235,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                     error = SpotifyError.INVALID_AUTH_DETAILS
                     return@exponentiallyBackoff false
                 }
+
                 401 -> {
                     logger.error(
                         "Got back response code 401  with data \"{}\"; returning INVALID_AUTH_DETAILS",
@@ -228,6 +244,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                     error = SpotifyError.INVALID_AUTH_DETAILS
                     return@exponentiallyBackoff false
                 }
+
                 429 -> {
                     val backoff = response.header("Retry-After").firstOrNull()?.toIntOrNull() ?: 4
                     logger.warn(
@@ -237,6 +254,7 @@ object SpotifyAnalyser : IAnalyser, CoroutineScope {
                     delay(backoff * 1000L)
                     return@exponentiallyBackoff true
                 }
+
                 else -> {
                     logger.warn(
                         "Got back response code {} with data \"{}\"; backing off and trying again",
