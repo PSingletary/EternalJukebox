@@ -11,6 +11,7 @@ try
 {
     git cliff --config cliff.toml --tag "$VersionTag" -o CHANGELOG.md
     git add CHANGELOG.md
+    git commit -m "chore(release): prepare for $VersionTag"
 
     $changelog = (git cliff --config release_tag.toml --unreleased --strip all) -join "`n"
 
