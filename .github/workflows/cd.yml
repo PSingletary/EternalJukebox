@@ -34,8 +34,8 @@ jobs:
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           set +e
           git add CHANGELOG.md
-          git commit -m "Update changelog"
-          git push https://${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git ${{ github.ref_name }}
+          git commit -m "core(release): Prepare ${{ github.ref_name }}"
+          git push
       - name: Read CHANGELOG.md
         id: read_changelog
         shell: bash
