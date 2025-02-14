@@ -23,7 +23,10 @@ jobs:
         id: git-cliff
         with:
           config: cliff.toml
-          args: -vv --latest --no-exec --github-repo ${{ github.repository }} -o CHANGELOG.md
+          args: --latest --no-exec --github-repo ${{ github.repository }}
+        env:
+          OUTPUT: CHANGELOG.md
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Commit
         run: |
           git checkout ${{ github.ref_name }}
