@@ -42,7 +42,10 @@ import java.util.concurrent.TimeUnit
 import kotlin.reflect.jvm.jvmName
 
 object EternalJukebox : CoroutineScope {
-    override val coroutineContext = SupervisorJob() + CoroutineName("EternalJukebox") // `SupervisorJob` means this won't be cancelled
+    private val logger: Logger = LoggerFactory.getLogger("EternalBox")
+
+    // `SupervisorJob` means this won't be canceled
+    override val coroutineContext = SupervisorJob() + CoroutineName("EternalJukebox") + LogCoroutineExceptionHandler(logger)
 
     val jsonMapper: ObjectMapper = ObjectMapper()
             .registerModules(Jdk8Module(), KotlinModule.Builder().build(), JavaTimeModule(), ParameterNamesModule())
@@ -75,8 +78,6 @@ object EternalJukebox : CoroutineScope {
     val analyticsProviders: List<IAnalyticsProvider>
 
     val database: IDatabase
-
-    private val logger: Logger = LoggerFactory.getLogger("EternalBox")
 
     private val schedule: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private val apis = ArrayList<IAPI>()

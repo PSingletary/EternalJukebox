@@ -10,6 +10,8 @@ import io.vertx.kotlin.coroutines.dispatcher
 import kotlinx.coroutines.launch
 import org.abimon.eternalJukebox.objects.ClientInfo
 import org.abimon.eternalJukebox.objects.ConstantValues
+import org.abimon.eternalJukebox.objects.CoroutineClientInfo
+import org.slf4j.LoggerFactory
 
 fun HttpServerResponse.end(json: JsonArray) = putHeader("Content-Type", "application/json").end(json.toString())
 fun HttpServerResponse.end(json: JsonObject) = putHeader("Content-Type", "application/json").end(json.toString())
@@ -32,6 +34,7 @@ val RoutingContext.clientInfo: ClientInfo
             return data()[ConstantValues.CLIENT_INFO] as ClientInfo
 
         val info = ClientInfo(this)
+        response().putHeader("X-Client-UID", info.userUID)
 
         data()[ConstantValues.CLIENT_INFO] = info
 
@@ -44,9 +47,17 @@ fun Route.suspendingBodyHandler(handler: suspend (RoutingContext) -> Unit, maxMb
     handler(BodyHandler.create().setBodyLimit(maxMb * 1000 * 1000).setDeleteUploadedFilesOnEnd(true))
         .suspendingHandler(handler)
 
+val SUSPENDING_HANDLER_LOGGER = LoggerFactory.getLogger("SuspendingHandler")
+
 fun Route.suspendingHandler(handler: suspend (RoutingContext) -> Unit): Route =
     handler { ctx ->
-        EternalJukebox.launch(ctx.vertx().dispatcher()) {
-            handler(ctx)
+        EternalJukebox.launch(ctx.vertx().dispatcher() + CoroutineClientInfo(ctx)) {
+            try {
+                handler(ctx)
+            } catch (th: Throwable) {
+                ctx.fail(th)
+
+                SUSPENDING_HANDLER_LOGGER.error("[{}] An exception occurred whilst handling a request", coroutineContext, th)
+            }
         }
     }
