@@ -278,8 +278,7 @@ jobs:
             - name: STORAGE_TYPE
               value: "LOCAL"
             - name: DATABASE_TYPE
-              value: "H2"
-        EOF
+              value: "H2"        EOF
         
         # Deploy to App Runner
         aws apprunner create-service \
