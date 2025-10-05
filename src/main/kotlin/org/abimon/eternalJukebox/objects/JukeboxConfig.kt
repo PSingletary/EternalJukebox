@@ -7,8 +7,6 @@ data class JukeboxConfig(
 
         val redirects: Map<String, String> = mapOf("/" to "/jukebox_index.html"),
 
-        val spotifyClient: String? = null,
-        val spotifySecret: String? = null,
 
         val disable: Map<String, Boolean> = emptyMap(),
 

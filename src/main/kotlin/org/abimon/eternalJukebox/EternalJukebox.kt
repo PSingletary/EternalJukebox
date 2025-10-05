@@ -14,7 +14,6 @@ import io.vertx.core.VertxOptions
 import io.vertx.core.http.HttpServer
 import io.vertx.ext.web.Router
 import org.abimon.eternalJukebox.data.analysis.IAnalyser
-import org.abimon.eternalJukebox.data.analysis.SpotifyAnalyser
 import org.abimon.eternalJukebox.data.analytics.IAnalyticsProvider
 import org.abimon.eternalJukebox.data.analytics.IAnalyticsStorage
 import org.abimon.eternalJukebox.data.audio.IAudioSource
@@ -63,7 +62,6 @@ object EternalJukebox {
     val storage: IStorage
     val audio: IAudioSource?
 
-    val spotify: IAnalyser
 
     val analytics: IAnalyticsStorage
     val analyticsProviders: List<IAnalyticsProvider>
@@ -184,10 +182,6 @@ object EternalJukebox {
             audio = EmptyDataAPI
         }
 
-        spotify = if (isEnabled("audioAPI") || isEnabled("analysisAPI"))
-            SpotifyAnalyser
-        else
-            EmptyDataAPI
 
         if (isEnabled("nodeAPI"))
             apis.add(NodeAPI)

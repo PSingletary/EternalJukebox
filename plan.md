@@ -283,7 +283,7 @@ Create GitHub Actions workflows for automated deployment to:
 
 ### Backend Implementation (Todos 1-5)
 - [x] **Todo 1**: Create Python audio analysis microservice with librosa ✅ COMPLETED
-- [ ] **Todo 2**: Remove Spotify dependencies from Kotlin backend code ⏳ READY TO START
+- [x] **Todo 2**: Remove Spotify dependencies from Kotlin backend code ✅ COMPLETED
 - [ ] **Todo 3**: Create GenericAnalyser to replace SpotifyAnalyser
 - [ ] **Todo 4**: Update audio source system to support any yt-dlp URL
 - [ ] **Todo 5**: Modify AnalysisAPI to integrate with Python service
@@ -498,12 +498,18 @@ Next: After completing, update plan.md changelog and mark all todos complete.
 
 ## 🚀 **PROGRESS SUMMARY - 75% Context Used**
 
-### **✅ COMPLETED (1/13 todos)**
+### **✅ COMPLETED (2/13 todos)**
 - **Todo 1**: Python audio analysis microservice with librosa
   - Created complete `analysis-service/` directory
   - Implemented Flask REST API with librosa analysis
   - Added Docker containerization and health checks
   - Created comprehensive test suite and documentation
+- **Todo 2**: Remove Spotify dependencies from Kotlin backend code
+  - Deleted SpotifyAnalyser.kt and SpotifyError.kt entirely
+  - Removed spotifyClient/spotifySecret from JukeboxConfig.kt
+  - Updated EternalJukebox.kt to remove Spotify initialization
+  - Removed Spotify references from config templates
+  - Updated README.md to remove Spotify setup instructions
 
 ### **🔧 INFRASTRUCTURE FIXES**
 - Fixed build.gradle KotlinCompile import issues
@@ -514,7 +520,7 @@ Next: After completing, update plan.md changelog and mark all todos complete.
 ### **📊 CURRENT STATUS**
 - **Branch**: `llm` (active development branch)
 - **Pull Request**: #1 created and ready for implementation
-- **Next Todo**: Todo 2 - Remove Spotify dependencies from Kotlin backend
+- **Next Todo**: Todo 3 - Create GenericAnalyser to replace SpotifyAnalyser
 - **Files Ready**: Python analysis service fully implemented
 
 ---

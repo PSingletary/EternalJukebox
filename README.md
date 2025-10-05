@@ -93,13 +93,7 @@ The project site is over [here](https://jenkins.abimon.org/job/EternalJukebox/),
 
 First thing to do is create a new file called either `config.yaml` or `config.json` (YAML tends to be easier to write, but takes up slightly more space), then open it with notepad/notepad++ on Windows and whatever text editor you like on Linux (for example nano: `nano config.json`)
 
-Now you should go to https://developer.spotify.com/my-applications/ and log in to your spotify account.
-Then click the "Create an app" button and a new page should popup.
-There give it a name and description and click create.
-It should send you to the new app's page, the only thing you need from here is your Client ID and Client Secret
-(Note: Never share these with anyone!)
-
-You will also need a Youtube Data API key, which you can find about how to obtain [here](https://developers.google.com/youtube/v3/getting-started).
+You will need a Youtube Data API key, which you can find about how to obtain [here](https://developers.google.com/youtube/v3/getting-started).
 
 There are a variety of config options (documentation coming soon) that allow most portions of the EternalJukebox to be configured, and these can be entered here.
 
