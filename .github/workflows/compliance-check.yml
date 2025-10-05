@@ -1,0 +1,356 @@
+name: Compliance and Security Policy Check
+
+on:
+  push:
+    branches: [ main, llm, develop ]
+  pull_request:
+    branches: [ main, llm ]
+  schedule:
+    # Run compliance check weekly on Mondays at 4 AM UTC
+    - cron: '0 4 * * 1'
+
+jobs:
+  owasp-compliance:
+    name: OWASP Top 10 Compliance Check
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: OWASP A01 - Broken Access Control
+      run: |
+        echo "## 🔒 OWASP A01: Broken Access Control" > owasp-report.md
+        echo "" >> owasp-report.md
+        
+        # Check for authentication/authorization issues
+        echo "### Authentication Checks:" >> owasp-report.md
+        if grep -r "password\|secret\|token" src/ --exclude-dir=test | grep -v "TODO\|FIXME\|example"; then
+          echo "⚠️ Potential hardcoded credentials found" >> owasp-report.md
+        else
+          echo "✅ No hardcoded credentials detected" >> owasp-report.md
+        fi
+        
+        # Check for proper session management
+        echo "" >> owasp-report.md
+        echo "### Session Management:" >> owasp-report.md
+        if grep -r "session\|cookie" src/ --include="*.kt" | grep -v "TODO\|FIXME"; then
+          echo "✅ Session management code found" >> owasp-report.md
+        else
+          echo "⚠️ No explicit session management found" >> owasp-report.md
+        fi
+        
+    - name: OWASP A02 - Cryptographic Failures
+      run: |
+        echo "" >> owasp-report.md
+        echo "## 🔐 OWASP A02: Cryptographic Failures" >> owasp-report.md
+        echo "" >> owasp-report.md
+        
+        # Check for weak cryptographic practices
+        echo "### Encryption Usage:" >> owasp-report.md
+        if grep -r "MD5\|SHA1\|DES\|RC4" src/ analysis-service/ --exclude-dir=test; then
+          echo "❌ Weak cryptographic algorithms detected" >> owasp-report.md
+        else
+          echo "✅ No weak cryptographic algorithms found" >> owasp-report.md
+        fi
+        
+        # Check for HTTPS usage
+        echo "" >> owasp-report.md
+        echo "### HTTPS Configuration:" >> owasp-report.md
+        if grep -r "https://" src/ _web/ analysis-service/; then
+          echo "✅ HTTPS URLs found" >> owasp-report.md
+        else
+          echo "⚠️ Limited HTTPS usage detected" >> owasp-report.md
+        fi
+        
+    - name: OWASP A03 - Injection
+      run: |
+        echo "" >> owasp-report.md
+        echo "## 💉 OWASP A03: Injection" >> owasp-report.md
+        echo "" >> owasp-report.md
+        
+        # Check for SQL injection vulnerabilities
+        echo "### SQL Injection Prevention:" >> owasp-report.md
+        if grep -r "PreparedStatement\|parameterized" src/; then
+          echo "✅ Parameterized queries found" >> owasp-report.md
+        else
+          echo "⚠️ No parameterized queries detected" >> owasp-report.md
+        fi
+        
+        # Check for command injection
+        echo "" >> owasp-report.md
+        echo "### Command Injection Prevention:" >> owasp-report.md
+        if grep -r "ProcessBuilder\|Runtime.exec" src/; then
+          echo "⚠️ Process execution found - review for injection risks" >> owasp-report.md
+        else
+          echo "✅ No direct process execution found" >> owasp-report.md
+        fi
+        
+        # Check for XSS prevention
+        echo "" >> owasp-report.md
+        echo "### XSS Prevention:" >> owasp-report.md
+        if grep -r "innerHTML\|document.write\|eval" _web/ --include="*.js" --include="*.html"; then
+          echo "⚠️ Potential XSS vectors found in frontend" >> owasp-report.md
+        else
+          echo "✅ No obvious XSS vectors found" >> owasp-report.md
+        fi
+        
+    - name: OWASP A04 - Insecure Design
+      run: |
+        echo "" >> owasp-report.md
+        echo "## 🏗️ OWASP A04: Insecure Design" >> owasp-report.md
+        echo "" >> owasp-report.md
+        
+        # Check for security by design principles
+        echo "### Security Headers:" >> owasp-report.md
+        if grep -r "Content-Security-Policy\|X-Frame-Options\|X-XSS-Protection" src/ _web/; then
+          echo "✅ Security headers configured" >> owasp-report.md
+        else
+          echo "⚠️ Security headers not found" >> owasp-report.md
+        fi
+        
+        # Check for input validation
+        echo "" >> owasp-report.md
+        echo "### Input Validation:" >> owasp-report.md
+        if grep -r "validate\|sanitize\|filter" src/ analysis-service/; then
+          echo "✅ Input validation code found" >> owasp-report.md
+        else
+          echo "⚠️ Limited input validation detected" >> owasp-report.md
+        fi
+        
+    - name: OWASP A05 - Security Misconfiguration
+      run: |
+        echo "" >> owasp-report.md
+        echo "## ⚙️ OWASP A05: Security Misconfiguration" >> owasp-report.md
+        echo "" >> owasp-report.md
+        
+        # Check for debug mode in production
+        echo "### Debug Configuration:" >> owasp-report.md
+        if grep -r "debug.*true\|DEBUG.*true" src/ analysis-service/; then
+          echo "⚠️ Debug mode enabled - ensure disabled in production" >> owasp-report.md
+        else
+          echo "✅ No debug mode detected" >> owasp-report.md
+        fi
+        
+        # Check for default credentials
+        echo "" >> owasp-report.md
+        echo "### Default Credentials:" >> owasp-report.md
+        if grep -r "admin\|password\|123456" config_template.* envvar_config.*; then
+          echo "⚠️ Default credentials in templates - ensure changed in production" >> owasp-report.md
+        else
+          echo "✅ No default credentials in templates" >> owasp-report.md
+        fi
+        
+    - name: OWASP A06 - Vulnerable Components
+      run: |
+        echo "" >> owasp-report.md
+        echo "## 📦 OWASP A06: Vulnerable Components" >> owasp-report.md
+        echo "" >> owasp-report.md
+        
+        # This will be complemented by dependency scanning
+        echo "### Dependency Vulnerability Check:" >> owasp-report.md
+        echo "See dependency-scan workflow for detailed vulnerability analysis" >> owasp-report.md
+        
+    - name: OWASP A07 - Authentication Failures
+      run: |
+        echo "" >> owasp-report.md
+        echo "## 🔑 OWASP A07: Authentication Failures" >> owasp-report.md
+        echo "" >> owasp-report.md
+        
+        # Check for authentication implementation
+        echo "### Authentication Implementation:" >> owasp-report.md
+        if grep -r "authenticate\|login\|auth" src/; then
+          echo "✅ Authentication code found" >> owasp-report.md
+        else
+          echo "ℹ️ No explicit authentication found (may be API-only)" >> owasp-report.md
+        fi
+        
+    - name: OWASP A08 - Software Integrity Failures
+      run: |
+        echo "" >> owasp-report.md
+        echo "## 🔒 OWASP A08: Software Integrity Failures" >> owasp-report.md
+        echo "" >> owasp-report.md
+        
+        # Check for integrity verification
+        echo "### Integrity Verification:" >> owasp-report.md
+        if grep -r "checksum\|hash\|signature" src/ analysis-service/; then
+          echo "✅ Integrity verification code found" >> owasp-report.md
+        else
+          echo "⚠️ No integrity verification found" >> owasp-report.md
+        fi
+        
+    - name: OWASP A09 - Logging Failures
+      run: |
+        echo "" >> owasp-report.md
+        echo "## 📝 OWASP A09: Logging Failures" >> owasp-report.md
+        echo "" >> owasp-report.md
+        
+        # Check for logging implementation
+        echo "### Logging Implementation:" >> owasp-report.md
+        if grep -r "log\|Log\|logger" src/ analysis-service/; then
+          echo "✅ Logging implementation found" >> owasp-report.md
+        else
+          echo "⚠️ Limited logging found" >> owasp-report.md
+        fi
+        
+        # Check for sensitive data in logs
+        echo "" >> owasp-report.md
+        echo "### Sensitive Data Logging:" >> owasp-report.md
+        if grep -r "log.*password\|log.*token\|log.*secret" src/ analysis-service/; then
+          echo "❌ Potential sensitive data logging found" >> owasp-report.md
+        else
+          echo "✅ No obvious sensitive data logging found" >> owasp-report.md
+        fi
+        
+    - name: OWASP A10 - Server-Side Request Forgery
+      run: |
+        echo "" >> owasp-report.md
+        echo "## 🌐 OWASP A10: Server-Side Request Forgery" >> owasp-report.md
+        echo "" >> owasp-report.md
+        
+        # Check for HTTP requests
+        echo "### HTTP Request Handling:" >> owasp-report.md
+        if grep -r "HttpClient\|URLConnection\|http://\|https://" src/ analysis-service/; then
+          echo "⚠️ HTTP requests found - ensure SSRF protection" >> owasp-report.md
+        else
+          echo "✅ No direct HTTP requests found" >> owasp-report.md
+        fi
+        
+    - name: Upload OWASP report
+      uses: actions/upload-artifact@v4
+      with:
+        name: owasp-compliance-report
+        path: owasp-report.md
+        retention-days: 30
+
+  security-policy-check:
+    name: Security Policy Compliance
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check security policy files
+      run: |
+        echo "## 🛡️ Security Policy Compliance" > policy-report.md
+        echo "" >> policy-report.md
+        
+        # Check for security policy files
+        echo "### Security Documentation:" >> policy-report.md
+        if [ -f "SECURITY.md" ]; then
+          echo "✅ SECURITY.md found" >> policy-report.md
+        else
+          echo "❌ SECURITY.md missing" >> policy-report.md
+        fi
+        
+        if [ -f ".github/SECURITY.md" ]; then
+          echo "✅ GitHub security policy found" >> policy-report.md
+        else
+          echo "❌ GitHub security policy missing" >> policy-report.md
+        fi
+        
+        # Check for code of conduct
+        echo "" >> policy-report.md
+        echo "### Code of Conduct:" >> policy-report.md
+        if [ -f "CODE_OF_CONDUCT.md" ]; then
+          echo "✅ CODE_OF_CONDUCT.md found" >> policy-report.md
+        else
+          echo "⚠️ CODE_OF_CONDUCT.md missing" >> policy-report.md
+        fi
+        
+        # Check for contributing guidelines
+        echo "" >> policy-report.md
+        echo "### Contributing Guidelines:" >> policy-report.md
+        if [ -f "CONTRIBUTING.md" ]; then
+          echo "✅ CONTRIBUTING.md found" >> policy-report.md
+        else
+          echo "⚠️ CONTRIBUTING.md missing" >> policy-report.md
+        fi
+        
+    - name: Check for security-related configuration
+      run: |
+        echo "" >> policy-report.md
+        echo "### Security Configuration:" >> policy-report.md
+        
+        # Check for CORS configuration
+        if grep -r "cors\|CORS" src/ analysis-service/; then
+          echo "✅ CORS configuration found" >> policy-report.md
+        else
+          echo "⚠️ No CORS configuration found" >> policy-report.md
+        fi
+        
+        # Check for rate limiting
+        if grep -r "rate.*limit\|throttle" src/ analysis-service/; then
+          echo "✅ Rate limiting found" >> policy-report.md
+        else
+          echo "⚠️ No rate limiting found" >> policy-report.md
+        fi
+        
+        # Check for security headers in configuration
+        if grep -r "security.*header\|X-.*-Options" src/ analysis-service/; then
+          echo "✅ Security headers configured" >> policy-report.md
+        else
+          echo "⚠️ No security headers configuration found" >> policy-report.md
+        fi
+        
+    - name: Upload policy report
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-policy-report
+        path: policy-report.md
+        retention-days: 30
+
+  compliance-summary:
+    name: Compliance Summary
+    runs-on: ubuntu-latest
+    needs: [owasp-compliance, security-policy-check]
+    if: always()
+    
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      
+    - name: Generate compliance summary
+      run: |
+        echo "## 🛡️ Security Compliance Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        echo "### OWASP Top 10 Compliance:" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ needs.owasp-compliance.result }}" = "success" ]; then
+          echo "✅ **OWASP Compliance Check**: COMPLETED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **OWASP Compliance Check**: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "### Security Policy Compliance:" >> $GITHUB_STEP_SUMMARY
+        if [ "${{ needs.security-policy-check.result }}" = "success" ]; then
+          echo "✅ **Security Policy Check**: COMPLETED" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "❌ **Security Policy Check**: FAILED" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Compliance Checklist:" >> $GITHUB_STEP_SUMMARY
+        echo "- [ ] All OWASP Top 10 vulnerabilities addressed" >> $GITHUB_STEP_SUMMARY
+        echo "- [ ] Security policies documented" >> $GITHUB_STEP_SUMMARY
+        echo "- [ ] Input validation implemented" >> $GITHUB_STEP_SUMMARY
+        echo "- [ ] Authentication/authorization properly configured" >> $GITHUB_STEP_SUMMARY
+        echo "- [ ] Security headers configured" >> $GITHUB_STEP_SUMMARY
+        echo "- [ ] Dependency vulnerabilities resolved" >> $GITHUB_STEP_SUMMARY
+        echo "- [ ] Logging and monitoring implemented" >> $GITHUB_STEP_SUMMARY
+        echo "- [ ] Error handling secure" >> $GITHUB_STEP_SUMMARY
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Note**: Review detailed reports in artifacts for specific findings and recommendations." >> $GITHUB_STEP_SUMMARY
