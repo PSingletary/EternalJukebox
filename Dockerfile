@@ -7,7 +7,7 @@ RUN wget https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp -O /us
     && chmod a+rx /usr/local/bin/yt-dlp
 
 RUN apk update \
-    && apk add ffmpeg gettext python3 \
+    && apk add ffmpeg gettext python3 curl \
     && touch hikari.properties
 
 # build jar with gradle
@@ -45,6 +45,10 @@ FROM deps as main
 
 COPY --from=jekyll-build /EternalJukebox/ ./
 COPY --from=gradle-build /home/gradle/project/EternalJukebox/build/libs/* ./
+
+# Add health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8080/healthy || exit 1
 
 # envsubst is used so environment variables can be used instead of a config file
 
