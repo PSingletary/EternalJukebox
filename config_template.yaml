@@ -12,6 +12,9 @@ storageOptions:
   PROFILE_FOLDER: data/profile
   LOG_FOLDER: data/log
 
+# Audio analysis service configuration
+analysisServiceUrl: http://localhost:5000
+
 # If not provided, local audio should work
 audioSourceType: YOUTUBE
 audioSourceOptions:

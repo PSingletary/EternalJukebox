@@ -12,6 +12,8 @@
     "PROFILE_FOLDER": "data/profile",
     "LOG_FOLDER": "data/log"
   },
+  "analysisServiceComment": "Audio analysis service configuration",
+  "analysisServiceUrl": "http://localhost:5000",
   "audioSourceComment": "If not provided, local audio should work",
   "audioSourceType": "YOUTUBE",
   "audioSourceOptions": {

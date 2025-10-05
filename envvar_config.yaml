@@ -19,6 +19,9 @@ storageOptions:
   PROFILE_FOLDER: data/profile
   LOG_FOLDER: data/log
 
+# Audio analysis service configuration
+analysisServiceUrl: ${ANALYSIS_SERVICE_URL}
+
 # If not provided, local audio should work
 audioSourceType: YOUTUBE
 audioSourceOptions:
