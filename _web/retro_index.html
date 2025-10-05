@@ -292,7 +292,12 @@ app: jukebox
         t.fixedTitle = getTitle(t.info.title, t.info.artist);
         document.title = 'Eternal Jukebox for ' + t.fixedTitle;
         $("#song-title").text(t.fixedTitle);
-        $("#song-url").attr("href", "https://open.spotify.com/track/" + t.info.id);
+        // Update to show generic source URL instead of Spotify
+        if (t.info.source_url) {
+            $("#song-url").attr("href", t.info.source_url).text("Original Source");
+        } else {
+            $("#song-url").hide();
+        }
         $("#song-length").text(secondsToTime(track.audio_summary.duration));
         jukeboxData.minLongBranch = track.analysis.beats.length / 5;
     }

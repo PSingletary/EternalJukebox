@@ -289,7 +289,7 @@ Create GitHub Actions workflows for automated deployment to:
 - [x] **Todo 5**: Modify AnalysisAPI to integrate with Python service ✅ COMPLETED
 
 ### Frontend & Infrastructure (Todos 6-8)
-- [ ] **Todo 6**: Update frontend for generic URL input and remove Spotify references
+- [x] **Todo 6**: Update frontend for generic URL input and remove Spotify references ✅ COMPLETED
 - [ ] **Todo 7**: Update Docker configuration for analysis service
 - [ ] **Todo 8**: Update configuration templates and documentation
 
@@ -530,6 +530,15 @@ Next: After completing, update plan.md changelog and mark all todos complete.
   - Added analysis generation logic using Python service
   - Enhanced error handling for analysis service unavailability
   - Implemented caching of generated analysis in storage
+- **Todo 6**: Update frontend for generic URL input and remove Spotify references
+  - Updated search-js.html to replace Spotify URL input with generic URL input
+  - Enhanced go-js.html to support URL-based analysis via new /analyse/url endpoint
+  - Updated search.html layout with modern URL input field and placeholder text
+  - Removed all Spotify-specific references from frontend files
+  - Updated FAQ, footer, and documentation to reflect new yt-dlp + librosa system
+  - Replaced manual analysis instructions with automatic analysis messaging
+  - Added URL validation for yt-dlp compatible URLs (1800+ platforms)
+  - Created test frontend validation page for URL input functionality
 
 ### **🔧 INFRASTRUCTURE FIXES**
 - Fixed build.gradle KotlinCompile import issues
@@ -540,7 +549,7 @@ Next: After completing, update plan.md changelog and mark all todos complete.
 ### **📊 CURRENT STATUS**
 - **Branch**: `llm` (active development branch)
 - **Pull Request**: #1 created and ready for implementation
-- **Next Todo**: Todo 6 - Update frontend for generic URL input and remove Spotify references
+- **Next Todo**: Todo 7 - Update Docker configuration for analysis service
 - **Files Ready**: Python analysis service fully implemented
 
 ---

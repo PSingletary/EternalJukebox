@@ -59,18 +59,23 @@ function getTitle(title, artist, url) {
 }
 
 function goDirect() {
-    var spotify = $("#direct-spotify").val();
-    var match = spotify.match(/spotify.com\/(?:intl-[a-zA-Z-]+\/)?track\/([^\/?]+)/);
-    if (match === null) {
-        alert("Please enter a valid Spotify song share link (open.spotify.com/track/<id>)");
+    var url = $("#direct-url").val().trim();
+    if (!url) {
+        alert("Please enter a valid URL (YouTube, SoundCloud, Bandcamp, Vimeo, etc.)");
         return;
     }
-    var params = new URLSearchParams({id: match[1]});
-    var audioValue = $("#direct-audio").val().trim();
-    if (audioValue) {
-        params.append('audio', audioValue);
+    
+    // Validate URL format
+    try {
+        new URL(url);
+    } catch (e) {
+        alert("Please enter a valid URL (YouTube, SoundCloud, Bandcamp, Vimeo, etc.)");
+        return;
     }
-    window.location.href = "{% if page.app == 'jukebox' %}jukebox{% elsif page.app == 'canonizer' %}canonizer{% endif %}_go.html?" + params.toString();
+    
+    // Call the new /analyse/url endpoint
+    var params = new URLSearchParams({url: url});
+    window.location.href = "{% if page.app == 'jukebox' %}jukebox{% elsif page.app == 'canonizer' %}canonizer{% endif %}_go.html?url=" + encodeURIComponent(url);
 }
 
 function init() {
@@ -88,13 +93,7 @@ function init() {
         goDirect();
     });
 
-    $("#direct-spotify").keyup(function (e) {
-        if (e.keyCode == 13) {
-            goDirect();
-        }
-    });
-
-    $("#direct-audio").keyup(function (e) {
+    $("#direct-url").keyup(function (e) {
         if (e.keyCode == 13) {
             goDirect();
         }

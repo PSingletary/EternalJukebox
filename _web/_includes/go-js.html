@@ -248,7 +248,12 @@
         t.fixedTitle = getTitle(t.info.title, t.info.artist);
         document.title = 'Eternal Jukebox for ' + t.fixedTitle;
         $("#song-title").text(t.fixedTitle);
-        $("#song-url").attr("href", "https://open.spotify.com/track/" + t.info.id);
+        // Update to show generic source URL instead of Spotify
+        if (t.info.source_url) {
+            $("#song-url").attr("href", t.info.source_url).text("Original Source");
+        } else {
+            $("#song-url").hide();
+        }
         $("#song-length").text(secondsToTime(track.audio_summary.duration));
         jukeboxData.minLongBranch = track.analysis.beats.length / 5;
     }
@@ -1866,6 +1871,104 @@
         return document.hidden || document.webkitHidden || false;
     }
 
+    function handleAnalysisParams(params) {
+        if ('thresh' in params) {
+            jukeboxData.currentThreshold = parseInt(params['thresh']);
+        }
+        if ('audio' in params) {
+            jukeboxData.audioURL = decodeURIComponent(params['audio']);
+        }
+        if ('audioOffset' in params) {
+            jukeboxData.audioOffset = parseFloat(params['audioOffset']);
+        }
+        if ('d' in params) {
+            var df = params['d'].split(',');
+            for (var i = 0; i < df.length; i++) {
+                var di = parseInt(df[i]);
+                jukeboxData.deletedEdges.push(di);
+            }
+        }
+        if ('lb' in params) {
+            if (params['lb'] === '0') {
+                jukeboxData.addLastEdge = false;
+            }
+        }
+
+        if ('jb' in params) {
+            if (params['jb'] === '1') {
+                jukeboxData.justBackwards = true;
+            }
+        }
+
+        if ('lg' in params) {
+            if (params['lg'] === '1') {
+                jukeboxData.justLongBranches = true;
+            }
+        }
+
+        if ('sq' in params) {
+            if (params['sq'] === '0') {
+                jukeboxData.removeSequentialBranches = true;
+            }
+        }
+
+        if ('nokeys' in params) {
+            if (params['nokeys'] === '1') {
+                jukeboxData.disableKeys = true
+            }
+        }
+
+        if ('bp' in params) {
+            var bp = params['bp'];
+            var fields = bp.split(',');
+            if (fields.length === 3) {
+                var minRange = parseInt(fields[0]);
+                var maxRange = parseInt(fields[1]);
+                var delta = parseInt(fields[2]);
+
+                jukeboxData.minRandomBranchChance = map_percent_to_range(minRange, 0, 1);
+                jukeboxData.maxRandomBranchChance = map_percent_to_range(maxRange, 0, 1);
+                jukeboxData.randomBranchChanceDelta =
+                    map_percent_to_range(delta, minRandomBranchChanceDelta, maxRandomBranchChanceDelta);
+
+            }
+        }
+        var q = document.URL.split('?')[1];
+        if (q != null) {
+            $("#canonize").attr("href", "canonizer_go.html?" + q.split('&').join('&'));
+        } else {
+            $("#canonize").attr("href", "canonizer_go.html");
+        }
+    }
+
+    function fetchAnalysisFromUrl(url) {
+        var url_endpoint = '/api/analysis/analyse/url';
+        info('Analyzing URL...');
+
+        $.ajax({
+            url: url_endpoint,
+            dataType: "json",
+            type: "POST",
+            data: JSON.stringify({url: url}),
+            contentType: "application/json",
+            crossDomain: true,
+            success: function (data) {
+                gotTheAnalysis(data);
+            },
+            error: function(xhr, textStatus, error) {
+                if (xhr.responseJSON) {
+                    if (typeof xhr.responseJSON.error === "string") {
+                        error = xhr.responseJSON.error;
+                    }
+                    if (xhr.responseJSON.show_manual_analysis_info) {
+                        $("#manual-analysis").show();
+                    }
+                }
+                info("Sorry, can't analyze that URL: " + error)
+            }
+        });
+    }
+
     function processParams() {
         var params = {};
         var q = document.URL.split('?')[1];
@@ -1881,75 +1984,14 @@
 
         if ('id' in params) {
             var id = params['id'];
-
-            if ('thresh' in params) {
-                jukeboxData.currentThreshold = parseInt(params['thresh']);
-            }
-            if ('audio' in params) {
-                jukeboxData.audioURL = decodeURIComponent(params['audio']);
-            }
-            if ('audioOffset' in params) {
-                jukeboxData.audioOffset = parseFloat(params['audioOffset']);
-            }
-            if ('d' in params) {
-                var df = params['d'].split(',');
-                for (var i = 0; i < df.length; i++) {
-                    var di = parseInt(df[i]);
-                    jukeboxData.deletedEdges.push(di);
-                }
-            }
-            if ('lb' in params) {
-                if (params['lb'] === '0') {
-                    jukeboxData.addLastEdge = false;
-                }
-            }
-
-            if ('jb' in params) {
-                if (params['jb'] === '1') {
-                    jukeboxData.justBackwards = true;
-                }
-            }
-
-            if ('lg' in params) {
-                if (params['lg'] === '1') {
-                    jukeboxData.justLongBranches = true;
-                }
-            }
-
-            if ('sq' in params) {
-                if (params['sq'] === '0') {
-                    jukeboxData.removeSequentialBranches = true;
-                }
-            }
-
-            if ('nokeys' in params) {
-                if (params['nokeys'] === '1') {
-                    jukeboxData.disableKeys = true
-                }
-            }
-
-            if ('bp' in params) {
-                var bp = params['bp'];
-                var fields = bp.split(',');
-                if (fields.length === 3) {
-                    var minRange = parseInt(fields[0]);
-                    var maxRange = parseInt(fields[1]);
-                    var delta = parseInt(fields[2]);
-
-                    jukeboxData.minRandomBranchChance = map_percent_to_range(minRange, 0, 1);
-                    jukeboxData.maxRandomBranchChance = map_percent_to_range(maxRange, 0, 1);
-                    jukeboxData.randomBranchChanceDelta =
-                        map_percent_to_range(delta, minRandomBranchChanceDelta, maxRandomBranchChanceDelta);
-
-                }
-            }
-            if (q != null) {
-                $("#canonize").attr("href", "canonizer_go.html?" + q.join('&'));
-            } else {
-                $("#canonize").attr("href", "canonizer_go.html");
-            }
+            handleAnalysisParams(params);
             setDisplayMode(true);
             fetchAnalysis(id);
+        } else if ('url' in params) {
+            var url = decodeURIComponent(params['url']);
+            handleAnalysisParams(params);
+            setDisplayMode(true);
+            fetchAnalysisFromUrl(url);
         } else {
             setDisplayMode(false);
         }
@@ -2272,6 +2314,34 @@
         });
     }
 
+    function fetchAnalysisFromUrl(url) {
+        var url_endpoint = '/api/analysis/analyse/url';
+        info('Analyzing URL...');
+
+        $.ajax({
+            url: url_endpoint,
+            dataType: "json",
+            type: "POST",
+            data: JSON.stringify({url: url}),
+            contentType: "application/json",
+            crossDomain: true,
+            success: function (data) {
+                gotTheAnalysis(data);
+            },
+            error: function(xhr, textStatus, error) {
+                if (xhr.responseJSON) {
+                    if (typeof xhr.responseJSON.error === "string") {
+                        error = xhr.responseJSON.error;
+                    }
+                    if (xhr.responseJSON.show_manual_analysis_info) {
+                        $("#manual-analysis").show();
+                    }
+                }
+                info("Sorry, can't analyze that URL: " + error)
+            }
+        });
+    }
+
     function fetchOgAudioSource(id) {
         $.ajax({
             url: "/api/audio/jukebox/" + id + "/location",
@@ -2507,9 +2577,13 @@
         } else {
             $("#jukebox").attr("href", "jukebox_go.html");
         }
+        
         if ('id' in params) {
             var id = params['id'];
             fetchAnalysis(id);
+        } else if ('url' in params) {
+            var url = decodeURIComponent(params['url']);
+            fetchAnalysisFromUrl(url);
         } else {
             fetchAnalysis('4kflIGfjdZJW4ot2ioixTB');
         }
