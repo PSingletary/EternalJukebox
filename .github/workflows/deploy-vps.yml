@@ -1,0 +1,342 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [ main, llm ]
+    paths:
+      - '.github/workflows/deploy-vps.yml'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - 'analysis-service/**'
+      - 'src/**'
+      - 'deployment/**'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      vps_provider:
+        description: 'VPS provider'
+        required: true
+        default: 'generic'
+        type: choice
+        options:
+        - generic
+        - digitalocean
+        - linode
+        - vultr
+        - hetzner
+      deployment_strategy:
+        description: 'Deployment strategy'
+        required: true
+        default: 'rolling'
+        type: choice
+        options:
+        - rolling
+        - blue-green
+        - replace
+
+env:
+  VPS_HOST: ${{ secrets.VPS_HOST }}
+  VPS_USER: ${{ secrets.VPS_USER }}
+  VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+  DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || '/opt/eternaljukebox' }}
+  BACKUP_PATH: ${{ secrets.BACKUP_PATH || '/opt/backups' }}
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Extract metadata for main app
+      id: meta-main
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKER_REGISTRY || 'eternaljukebox' }}/main
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push main application image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: ${{ secrets.DOCKER_REGISTRY != '' }}
+        tags: ${{ steps.meta-main.outputs.tags }}
+        labels: ${{ steps.meta-main.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+    - name: Extract metadata for analysis service
+      id: meta-analysis
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ secrets.DOCKER_REGISTRY || 'eternaljukebox' }}/analysis
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push analysis service image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./analysis-service
+        file: ./analysis-service/Dockerfile
+        push: ${{ secrets.DOCKER_REGISTRY != '' }}
+        tags: ${{ steps.meta-analysis.outputs.tags }}
+        labels: ${{ steps.meta-analysis.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+    - name: Save image info
+      run: |
+        echo "MAIN_IMAGE_TAG=${{ steps.meta-main.outputs.tags }}" >> $GITHUB_ENV
+        echo "ANALYSIS_IMAGE_TAG=${{ steps.meta-analysis.outputs.tags }}" >> $GITHUB_ENV
+
+  deploy-to-vps:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    permissions:
+      contents: read
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Setup SSH
+      uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+    - name: Add VPS to known hosts
+      run: |
+        ssh-keyscan -p ${{ env.VPS_PORT }} -H ${{ env.VPS_HOST }} >> ~/.ssh/known_hosts
+
+    - name: Create deployment directory
+      run: |
+        ssh -p ${{ env.VPS_PORT }} ${{ env.VPS_USER }}@${{ env.VPS_HOST }} "
+          sudo mkdir -p ${{ env.DEPLOY_PATH }}
+          sudo chown ${{ env.VPS_USER }}:${{ env.VPS_USER }} ${{ env.DEPLOY_PATH }}
+          sudo mkdir -p ${{ env.BACKUP_PATH }}
+          sudo chown ${{ env.VPS_USER }}:${{ env.VPS_USER }} ${{ env.BACKUP_PATH }}
+        "
+
+    - name: Copy deployment files
+      run: |
+        # Copy deployment files to VPS
+        scp -P ${{ env.VPS_PORT }} -r deployment/ ${{ env.VPS_USER }}@${{ env.VPS_HOST }}:${{ env.DEPLOY_PATH }}/
+        scp -P ${{ env.VPS_PORT }} docker-compose.yml ${{ env.VPS_USER }}@${{ env.VPS_HOST }}:${{ env.DEPLOY_PATH }}/
+        scp -P ${{ env.VPS_PORT }} Dockerfile ${{ env.VPS_USER }}@${{ env.VPS_HOST }}:${{ env.DEPLOY_PATH }}/
+        
+        # Copy analysis service files
+        ssh -p ${{ env.VPS_PORT }} ${{ env.VPS_USER }}@${{ env.VPS_HOST }} "
+          mkdir -p ${{ env.DEPLOY_PATH }}/analysis-service
+        "
+        scp -P ${{ env.VPS_PORT }} -r analysis-service/ ${{ env.VPS_USER }}@${{ env.VPS_HOST }}:${{ env.DEPLOY_PATH }}/
+
+    - name: Run VPS setup script
+      run: |
+        ssh -p ${{ env.VPS_PORT }} ${{ env.VPS_USER }}@${{ env.VPS_HOST }} "
+          chmod +x ${{ env.DEPLOY_PATH }}/deployment/vps-setup.sh
+          ${{ env.DEPLOY_PATH }}/deployment/vps-setup.sh --provider=${{ github.event.inputs.vps_provider || 'generic' }} --environment=${{ github.event.inputs.environment || 'staging' }}
+        "
+
+    - name: Create environment file
+      run: |
+        ssh -p ${{ env.VPS_PORT }} ${{ env.VPS_USER }}@${{ env.VPS_HOST }} "
+          cat > ${{ env.DEPLOY_PATH }}/.env << EOF
+        # EternalJukebox Environment Configuration
+        ENVIRONMENT=${{ github.event.inputs.environment || 'staging' }}
+        MAIN_IMAGE_TAG=${{ needs.build-and-push.outputs.MAIN_IMAGE_TAG || 'latest' }}
+        ANALYSIS_IMAGE_TAG=${{ needs.build-and-push.outputs.ANALYSIS_IMAGE_TAG || 'latest' }}
+        YOUTUBE_API_KEY=${{ secrets.YOUTUBE_API_KEY }}
+        DOMAIN_NAME=${{ secrets.DOMAIN_NAME || 'localhost' }}
+        ACME_EMAIL=${{ secrets.ACME_EMAIL }}
+        GRAFANA_PASSWORD=${{ secrets.GRAFANA_PASSWORD || 'admin' }}
+        ANALYSIS_WORKERS=${{ secrets.ANALYSIS_WORKERS || '2' }}
+        EOF
+        "
+
+    - name: Backup current deployment
+      run: |
+        ssh -p ${{ env.VPS_PORT }} ${{ env.VPS_USER }}@${{ env.VPS_HOST }} "
+          # Create backup timestamp
+          BACKUP_TIMESTAMP=\$(date +%Y%m%d_%H%M%S)
+          
+          # Stop current services if running
+          if [ -f ${{ env.DEPLOY_PATH }}/docker-compose.yml ]; then
+            cd ${{ env.DEPLOY_PATH }} && docker-compose down || true
+          fi
+          
+          # Create backup
+          if [ -d ${{ env.DEPLOY_PATH }}/data ]; then
+            sudo tar -czf ${{ env.BACKUP_PATH }}/eternaljukebox_data_\$BACKUP_TIMESTAMP.tar.gz -C ${{ env.DEPLOY_PATH }} data/
+          fi
+          
+          if [ -d ${{ env.DEPLOY_PATH }}/database ]; then
+            sudo tar -czf ${{ env.BACKUP_PATH }}/eternaljukebox_database_\$BACKUP_TIMESTAMP.tar.gz -C ${{ env.DEPLOY_PATH }} database/
+          fi
+          
+          # Keep only last 10 backups
+          cd ${{ env.BACKUP_PATH }}
+          ls -t eternaljukebox_*.tar.gz | tail -n +11 | xargs -r rm
+        "
+
+    - name: Deploy with Docker Compose
+      run: |
+        ssh -p ${{ env.VPS_PORT }} ${{ env.VPS_USER }}@${{ env.VPS_HOST }} "
+          cd ${{ env.DEPLOY_PATH }}
+          
+          # Use VPS-specific Docker Compose if available
+          if [ -f deployment/docker-compose.vps.yml ]; then
+            docker-compose -f docker-compose.yml -f deployment/docker-compose.vps.yml up -d
+          else
+            docker-compose up -d
+          fi
+        "
+
+    - name: Wait for services to be ready
+      run: |
+        ssh -p ${{ env.VPS_PORT }} ${{ env.VPS_USER }}@${{ env.VPS_HOST }} "
+          echo 'Waiting for services to start...'
+          sleep 30
+          
+          # Wait for main service
+          for i in {1..30}; do
+            if curl -f http://localhost:8080/healthy >/dev/null 2>&1; then
+              echo 'Main service is ready'
+              break
+            fi
+            echo \"Attempt \$i/30: Waiting for main service...\"
+            sleep 10
+          done
+          
+          # Wait for analysis service
+          for i in {1..30}; do
+            if curl -f http://localhost:5000/health >/dev/null 2>&1; then
+              echo 'Analysis service is ready'
+              break
+            fi
+            echo \"Attempt \$i/30: Waiting for analysis service...\"
+            sleep 10
+          done
+        "
+
+    - name: Run health checks
+      run: |
+        ssh -p ${{ env.VPS_PORT }} ${{ env.VPS_USER }}@${{ env.VPS_HOST }} "
+          cd ${{ env.DEPLOY_PATH }}
+          
+          # Run comprehensive health check
+          if [ -f deployment/health-check.sh ]; then
+            chmod +x deployment/health-check.sh
+            ./deployment/health-check.sh --main-url http://localhost:8080 --analysis-url http://localhost:5000
+          else
+            # Basic health checks
+            echo 'Running basic health checks...'
+            curl -f http://localhost:8080/healthy || exit 1
+            curl -f http://localhost:5000/health || exit 1
+            echo '✅ All health checks passed!'
+          fi
+        "
+
+    - name: Get deployment info
+      run: |
+        ssh -p ${{ env.VPS_PORT }} ${{ env.VPS_USER }}@${{ env.VPS_HOST }} "
+          echo '=== Deployment Information ==='
+          echo \"Host: ${{ env.VPS_HOST }}\"
+          echo \"Environment: ${{ github.event.inputs.environment || 'staging' }}\"
+          echo \"Provider: ${{ github.event.inputs.vps_provider || 'generic' }}\"
+          echo \"Deployment Path: ${{ env.DEPLOY_PATH }}\"
+          echo \"Deployment Time: \$(date)\"
+          echo ''
+          echo '=== Running Containers ==='
+          docker ps --format 'table {{.Names}}\\t{{.Status}}\\t{{.Ports}}'
+          echo ''
+          echo '=== Service URLs ==='
+          if [ -n '${{ secrets.DOMAIN_NAME }}' ]; then
+            echo \"Main Service: https://${{ secrets.DOMAIN_NAME }}\"
+            echo \"Analysis Service: Internal (port 5000)\"
+          else
+            echo \"Main Service: http://${{ env.VPS_HOST }}:8080\"
+            echo \"Analysis Service: http://${{ env.VPS_HOST }}:5000\"
+          fi
+        "
+
+    - name: Update deployment status
+      if: always()
+      run: |
+        if [ "${{ job.status }}" == "success" ]; then
+          echo "✅ VPS deployment completed successfully"
+          echo "Environment: ${{ github.event.inputs.environment || 'staging' }}"
+          echo "Provider: ${{ github.event.inputs.vps_provider || 'generic' }}"
+          echo "Host: ${{ env.VPS_HOST }}"
+          echo "Deployment Path: ${{ env.DEPLOY_PATH }}"
+        else
+          echo "❌ VPS deployment failed"
+          exit 1
+        fi
+
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  notify:
+    needs: [build-and-push, deploy-to-vps, security-scan]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Deployment notification
+      run: |
+        if [ "${{ needs.deploy-to-vps.result }}" == "success" ]; then
+          echo "🎉 Deployment to VPS completed successfully!"
+          echo "Environment: ${{ github.event.inputs.environment || 'staging' }}"
+          echo "Provider: ${{ github.event.inputs.vps_provider || 'generic' }}"
+          echo "Host: ${{ env.VPS_HOST }}"
+          echo "Deployment Path: ${{ env.DEPLOY_PATH }}"
+        else
+          echo "❌ VPS deployment failed"
+          exit 1
+        fi

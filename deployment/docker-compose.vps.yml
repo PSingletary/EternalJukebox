@@ -1,0 +1,298 @@
+version: '3.8'
+
+# VPS-specific Docker Compose configuration for EternalJukebox
+# This file extends the base docker-compose.yml with VPS-optimized settings
+
+services:
+  main:
+    extends:
+      file: docker-compose.yml
+      service: main
+    restart: unless-stopped
+    environment:
+      - PORT=8080
+      - ANALYSIS_SERVICE_URL=http://analysis-service:5000
+      - YOUTUBE_API_KEY=${YOUTUBE_API_KEY}
+      - STORAGE_TYPE=LOCAL
+      - DATABASE_TYPE=H2
+      - WORKER_EXECUTE_TIME=1200000000000
+      - ENVIRONMENT=${ENVIRONMENT:-staging}
+    volumes:
+      - ./data:/EternalJukebox/data
+      - ./database:/EternalJukebox/database
+      - ./logs:/EternalJukebox/logs
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.eternaljukebox.rule=Host(`${DOMAIN_NAME:-localhost}`)"
+      - "traefik.http.routers.eternaljukebox.tls=true"
+      - "traefik.http.routers.eternaljukebox.tls.certresolver=letsencrypt"
+      - "traefik.http.services.eternaljukebox.loadbalancer.server.port=8080"
+
+  analysis-service:
+    extends:
+      file: docker-compose.yml
+      service: analysis-service
+    restart: unless-stopped
+    environment:
+      - FLASK_ENV=production
+      - PYTHONPATH=/app
+      - WORKERS=${ANALYSIS_WORKERS:-2}
+    volumes:
+      - ./data/analysis:/tmp/audio_uploads
+      - ./data/analysis_cache:/tmp/analysis_cache
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
+
+  # Redis for caching (VPS optimized)
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    networks:
+      - internal
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+
+  # Traefik reverse proxy with SSL (VPS optimized)
+  traefik:
+    image: traefik:v3.0
+    restart: unless-stopped
+    networks:
+      - internal
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-certificates:/certificates
+    command:
+      - --api.dashboard=true
+      - --api.insecure=false
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      - --certificatesresolvers.letsencrypt.acme.tlschallenge=true
+      - --certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}
+      - --certificatesresolvers.letsencrypt.acme.storage=/certificates/acme.json
+      - --global.sendanonymoususage=false
+      - --log.level=INFO
+      - --accesslog=true
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.${DOMAIN_NAME:-localhost}`)"
+      - "traefik.http.routers.traefik.tls=true"
+      - "traefik.http.routers.traefik.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.traefik.service=api@internal"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  # Prometheus for metrics (production only)
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    networks:
+      - internal
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=15d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    profiles:
+      - monitoring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.prometheus.rule=Host(`prometheus.${DOMAIN_NAME:-localhost}`)"
+      - "traefik.http.routers.prometheus.tls=true"
+      - "traefik.http.routers.prometheus.tls.certresolver=letsencrypt"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+  # Grafana for visualization (production only)
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    networks:
+      - internal
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-simple-json-datasource
+    volumes:
+      - grafana-data:/var/lib/grafana
+    profiles:
+      - monitoring
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.grafana.rule=Host(`grafana.${DOMAIN_NAME:-localhost}`)"
+      - "traefik.http.routers.grafana.tls=true"
+      - "traefik.http.routers.grafana.tls.certresolver=letsencrypt"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1G
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+
+  # Log aggregation with Loki (production only)
+  loki:
+    image: grafana/loki:latest
+    restart: unless-stopped
+    networks:
+      - internal
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 256M
+
+  # Promtail for log collection (production only)
+  promtail:
+    image: grafana/promtail:latest
+    restart: unless-stopped
+    networks:
+      - internal
+    volumes:
+      - ./logs:/var/log/eternaljukebox:ro
+      - ./monitoring/promtail.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    profiles:
+      - monitoring
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 256M
+        reservations:
+          cpus: '0.05'
+          memory: 128M
+
+  # Nginx for static file serving (optional)
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    networks:
+      - internal
+    ports:
+      - "8081:80"
+    volumes:
+      - ./data/static:/usr/share/nginx/html:ro
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    profiles:
+      - static
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.static.rule=Host(`static.${DOMAIN_NAME:-localhost}`)"
+      - "traefik.http.routers.static.tls=true"
+      - "traefik.http.routers.static.tls.certresolver=letsencrypt"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+  # Backup service
+  backup:
+    image: alpine:latest
+    restart: "no"
+    networks:
+      - internal
+    volumes:
+      - ./data:/data:ro
+      - ./database:/database:ro
+      - ./backups:/backups
+      - ./scripts:/scripts:ro
+    command: /scripts/backup.sh
+    profiles:
+      - backup
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 128M
+        reservations:
+          cpus: '0.05'
+          memory: 64M
+
+networks:
+  internal:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  redis-data:
+    driver: local
+  traefik-certificates:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  loki-data:
+    driver: local
