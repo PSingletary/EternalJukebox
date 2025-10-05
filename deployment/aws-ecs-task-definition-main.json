@@ -1,0 +1,135 @@
+{
+  "family": "eternaljukebox-main",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::{{AWS_ACCOUNT_ID}}:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::{{AWS_ACCOUNT_ID}}:role/ecsTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "eternaljukebox-main",
+      "image": "{{IMAGE_URI}}",
+      "portMappings": [
+        {
+          "containerPort": 8080,
+          "protocol": "tcp"
+        }
+      ],
+      "essential": true,
+      "environment": [
+        {
+          "name": "PORT",
+          "value": "8080"
+        },
+        {
+          "name": "ANALYSIS_SERVICE_URL",
+          "value": "{{ANALYSIS_SERVICE_URL}}"
+        },
+        {
+          "name": "STORAGE_TYPE",
+          "value": "LOCAL"
+        },
+        {
+          "name": "DATABASE_TYPE",
+          "value": "H2"
+        },
+        {
+          "name": "WORKER_EXECUTE_TIME",
+          "value": "1200000000000"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "YOUTUBE_API_KEY",
+          "valueFrom": "arn:aws:ssm:{{AWS_REGION}}:{{AWS_ACCOUNT_ID}}:parameter/eternaljukebox/youtube-api-key"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/eternaljukebox-main",
+          "awslogs-region": "{{AWS_REGION}}",
+          "awslogs-stream-prefix": "ecs"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "curl -f http://localhost:8080/healthy || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 60
+      },
+      "mountPoints": [
+        {
+          "sourceVolume": "data",
+          "containerPath": "/EternalJukebox/data",
+          "readOnly": false
+        },
+        {
+          "sourceVolume": "database",
+          "containerPath": "/EternalJukebox/database",
+          "readOnly": false
+        },
+        {
+          "sourceVolume": "logs",
+          "containerPath": "/EternalJukebox/logs",
+          "readOnly": false
+        }
+      ],
+      "ulimits": [
+        {
+          "name": "nofile",
+          "softLimit": 65536,
+          "hardLimit": 65536
+        }
+      ],
+      "stopTimeout": 30,
+      "startTimeout": 60
+    }
+  ],
+  "volumes": [
+    {
+      "name": "data",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "{{EFS_FILE_SYSTEM_ID}}",
+        "rootDirectory": "/data",
+        "transitEncryption": "ENABLED"
+      }
+    },
+    {
+      "name": "database",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "{{EFS_FILE_SYSTEM_ID}}",
+        "rootDirectory": "/database",
+        "transitEncryption": "ENABLED"
+      }
+    },
+    {
+      "name": "logs",
+      "efsVolumeConfiguration": {
+        "fileSystemId": "{{EFS_FILE_SYSTEM_ID}}",
+        "rootDirectory": "/logs",
+        "transitEncryption": "ENABLED"
+      }
+    }
+  ],
+  "placementConstraints": [],
+  "tags": [
+    {
+      "key": "Environment",
+      "value": "{{ENVIRONMENT}}"
+    },
+    {
+      "key": "Application",
+      "value": "EternalJukebox"
+    },
+    {
+      "key": "Service",
+      "value": "Main"
+    }
+  ]
+}
