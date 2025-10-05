@@ -2,11 +2,11 @@ faq:
 - question: What is this?
   id: about
   answer: "_For when your favorite song just isn't long enough._\n
-  This web app lets you search a song on Spotify and will then generate a never-ending and ever changing version of the song. It does what Infinite Gangnam Style did but for any song."
+  This web app lets you search for any audio from YouTube, SoundCloud, Bandcamp, Vimeo, and 1800+ other platforms, then generates a never-ending and ever changing version of the song. It does what Infinite Gangnam Style did but for any audio source."
 
 - question: How does it work?
   id: technical
-  answer: "We use the [Spotify API](https://developer.spotify.com/web-api/get-audio-features/) to break the song into beats. We play the song beat by beat, but at every beat there's a chance that we will jump to a different part of song that happens to sound very similar to the current beat. For beat similarity we look at pitch, timbre, loudness, duration and the position of the beat within a bar. There's a nifty visualization that shows all the possible transitions that can occur at any beat.\n\n
+  answer: "We use [librosa](https://librosa.org/) to analyze audio and break the song into beats. We play the song beat by beat, but at every beat there's a chance that we will jump to a different part of song that happens to sound very similar to the current beat. For beat similarity we look at pitch, timbre, loudness, duration and the position of the beat within a bar. There's a nifty visualization that shows all the possible transitions that can occur at any beat.\n\n
   The backend is written in [Kotlin](https://kotlinlang.org/) and hosted on a [Google Compute](https://console.cloud.google.com/) server. The source code is available [here.]({{ site.data.var.git }})"
 
 - question: Are there any ways to control the song?
@@ -60,8 +60,8 @@ faq:
 - question: Help! My audio seems to be jumping randomly!
   id: random-jump
   answer: "There's a couple of reasons this could be:\n\n
-  The most likely being that the audio file we found for your song doesn't match up perfectly with the version that Spotify has, which means you'll experience jumps at points that there shouldn't be throughout a song.\n\n
-  The solution to this is to find a version of it that matches up to the version on Spotify **as close as possible**, or to upload your own track, if you can't find one online.\n\n
+  The most likely being that the audio file we found for your song doesn't match up perfectly with the version that was analyzed, which means you'll experience jumps at points that there shouldn't be throughout a song.\n\n
+  The solution to this is to find a version of it that matches up to the analyzed version **as close as possible**, or to upload your own track, if you can't find one online.\n\n
   If you _do_ have a song that seems to be synchronised perfectly, but still seems to jump randomly, feel free to file an issue [here]({{ site.data.var.git }}/issues)"
 
 - question: Help! Something broke!

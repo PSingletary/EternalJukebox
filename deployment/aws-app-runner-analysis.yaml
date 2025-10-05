@@ -1,0 +1,19 @@
+version: 1.0
+runtime: docker
+build:
+  commands:
+    build:
+      - echo "Build completed for Analysis Service App Runner deployment"
+run:
+  runtime-version: latest
+  command: python app.py
+  network:
+    port: 5000
+    env: FLASK_ENV
+  env:
+    - name: FLASK_ENV
+      value: "production"
+    - name: PYTHONPATH
+      value: "/app"
+    - name: WORKERS
+      value: "2"

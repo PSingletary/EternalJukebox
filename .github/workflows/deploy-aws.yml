@@ -1,0 +1,438 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [ main, llm ]
+    paths:
+      - '.github/workflows/deploy-aws.yml'
+      - 'docker-compose.yml'
+      - 'Dockerfile'
+      - 'analysis-service/**'
+      - 'src/**'
+      - 'deployment/**'
+  workflow_dispatch:
+    inputs:
+      deployment_target:
+        description: 'AWS deployment target'
+        required: true
+        default: 'ecs'
+        type: choice
+        options:
+        - ecs
+        - app-runner
+        - elastic-beanstalk
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+        - staging
+        - production
+      aws_region:
+        description: 'AWS region'
+        required: true
+        default: 'us-east-1'
+      cluster_name:
+        description: 'ECS cluster name (for ECS deployment)'
+        required: false
+        default: 'eternaljukebox-cluster'
+
+env:
+  AWS_REGION: ${{ github.event.inputs.aws_region || 'us-east-1' }}
+  ECR_REGISTRY: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.${{ github.event.inputs.aws_region || 'us-east-1' }}.amazonaws.com
+  ECS_CLUSTER: ${{ github.event.inputs.cluster_name || 'eternaljukebox-cluster' }}
+  ECS_SERVICE_MAIN: eternaljukebox-main
+  ECS_SERVICE_ANALYSIS: eternaljukebox-analysis
+  ECS_TASK_DEFINITION_MAIN: eternaljukebox-main
+  ECS_TASK_DEFINITION_ANALYSIS: eternaljukebox-analysis
+  IMAGE_NAME_MAIN: eternaljukebox-main
+  IMAGE_NAME_ANALYSIS: eternaljukebox-analysis
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Login to Amazon ECR
+      id: login-ecr
+      uses: aws-actions/amazon-ecr-login@v2
+
+    - name: Extract metadata for main app
+      id: meta-main
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME_MAIN }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push main application image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        file: ./Dockerfile
+        push: true
+        tags: ${{ steps.meta-main.outputs.tags }}
+        labels: ${{ steps.meta-main.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+    - name: Extract metadata for analysis service
+      id: meta-analysis
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME_ANALYSIS }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=sha,prefix={{branch}}-
+          type=raw,value=latest,enable={{is_default_branch}}
+
+    - name: Build and push analysis service image
+      uses: docker/build-push-action@v5
+      with:
+        context: ./analysis-service
+        file: ./analysis-service/Dockerfile
+        push: true
+        tags: ${{ steps.meta-analysis.outputs.tags }}
+        labels: ${{ steps.meta-analysis.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        platforms: linux/amd64
+
+  deploy-to-ecs:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    if: github.event.inputs.deployment_target == 'ecs' || github.event.inputs.deployment_target == ''
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Create ECS task definition for main service
+      id: task-def-main
+      run: |
+        # Get the latest image URI
+        IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME_MAIN }}:${{ github.ref_name }}-${{ github.sha }}
+        
+        # Create new task definition based on the template
+        sed -e "s|{{IMAGE_URI}}|${IMAGE_URI}|g" \
+            -e "s|{{ANALYSIS_SERVICE_URL}}|http://eternaljukebox-analysis:5000|g" \
+            -e "s|{{YOUTUBE_API_KEY}}|${{ secrets.YOUTUBE_API_KEY }}|g" \
+            deployment/aws-ecs-task-definition-main.json > task-definition-main.json
+        
+        # Register the task definition
+        TASK_DEF_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://task-definition-main.json \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
+        
+        echo "task-definition-arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+        echo "New task definition ARN: $TASK_DEF_ARN"
+
+    - name: Create ECS task definition for analysis service
+      id: task-def-analysis
+      run: |
+        # Get the latest image URI
+        IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME_ANALYSIS }}:${{ github.ref_name }}-${{ github.sha }}
+        
+        # Create new task definition based on the template
+        sed -e "s|{{IMAGE_URI}}|${IMAGE_URI}|g" \
+            deployment/aws-ecs-task-definition-analysis.json > task-definition-analysis.json
+        
+        # Register the task definition
+        TASK_DEF_ARN=$(aws ecs register-task-definition \
+          --cli-input-json file://task-definition-analysis.json \
+          --query 'taskDefinition.taskDefinitionArn' \
+          --output text)
+        
+        echo "task-definition-arn=$TASK_DEF_ARN" >> $GITHUB_OUTPUT
+        echo "New task definition ARN: $TASK_DEF_ARN"
+
+    - name: Deploy to ECS (Main Service)
+      run: |
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --service ${{ env.ECS_SERVICE_MAIN }} \
+          --task-definition ${{ steps.task-def-main.outputs.task-definition-arn }} \
+          --desired-count 2
+
+    - name: Deploy to ECS (Analysis Service)
+      run: |
+        aws ecs update-service \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --service ${{ env.ECS_SERVICE_ANALYSIS }} \
+          --task-definition ${{ steps.task-def-analysis.outputs.task-definition-arn }} \
+          --desired-count 1
+
+    - name: Wait for ECS deployment to complete
+      run: |
+        echo "Waiting for main service deployment to complete..."
+        aws ecs wait services-stable \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE_MAIN }}
+        
+        echo "Waiting for analysis service deployment to complete..."
+        aws ecs wait services-stable \
+          --cluster ${{ env.ECS_CLUSTER }} \
+          --services ${{ env.ECS_SERVICE_ANALYSIS }}
+
+    - name: Get service endpoints
+      run: |
+        # Get ALB DNS name for main service
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names eternaljukebox-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        
+        echo "🌐 Main service URL: http://$ALB_DNS"
+        echo "Main service URL: http://$ALB_DNS" >> $GITHUB_STEP_SUMMARY
+
+    - name: Run health checks
+      run: |
+        ALB_DNS=$(aws elbv2 describe-load-balancers \
+          --names eternaljukebox-alb \
+          --query 'LoadBalancers[0].DNSName' \
+          --output text)
+        
+        echo "Running health checks on http://$ALB_DNS"
+        sleep 30
+        
+        # Health check for main service
+        curl -f "http://$ALB_DNS/healthy" || exit 1
+        echo "✅ ECS deployment successful!"
+
+  deploy-to-app-runner:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    if: github.event.inputs.deployment_target == 'app-runner'
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Deploy to App Runner (Main Service)
+      run: |
+        IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME_MAIN }}:${{ github.ref_name }}-${{ github.sha }}
+        
+        # Create App Runner service configuration
+        cat > app-runner-main.yaml << EOF
+        version: 1.0
+        runtime: docker
+        build:
+          commands:
+            build:
+              - echo "Build completed"
+        run:
+          runtime-version: latest
+          command: java -jar EternalJukebox-all.jar
+          network:
+            port: 8080
+            env: PORT
+          env:
+            - name: PORT
+              value: "8080"
+            - name: ANALYSIS_SERVICE_URL
+              value: "http://eternaljukebox-analysis:5000"
+            - name: YOUTUBE_API_KEY
+              value: "${{ secrets.YOUTUBE_API_KEY }}"
+            - name: STORAGE_TYPE
+              value: "LOCAL"
+            - name: DATABASE_TYPE
+              value: "H2"        EOF
+        
+        # Deploy to App Runner
+        aws apprunner create-service \
+          --service-name eternaljukebox-main \
+          --source-configuration '{
+            "ImageRepository": {
+              "ImageIdentifier": "'$IMAGE_URI'",
+              "ImageConfiguration": {
+                "Port": "8080",
+                "RuntimeEnvironmentVariables": {
+                  "ANALYSIS_SERVICE_URL": "http://eternaljukebox-analysis:5000",
+                  "YOUTUBE_API_KEY": "${{ secrets.YOUTUBE_API_KEY }}",
+                  "STORAGE_TYPE": "LOCAL",
+                  "DATABASE_TYPE": "H2"
+                }
+              },
+              "ImageRepositoryType": "ECR"
+            },
+            "AutoDeploymentsEnabled": true
+          }' \
+          --instance-configuration '{
+            "Cpu": "1024",
+            "Memory": "2048"
+          }' \
+          --auto-scaling-configuration-arn arn:aws:apprunner:${{ env.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:autoscalingconfiguration/DefaultConfiguration/1/00000000000000000000000000000001
+
+    - name: Deploy to App Runner (Analysis Service)
+      run: |
+        IMAGE_URI=${{ env.ECR_REGISTRY }}/${{ env.IMAGE_NAME_ANALYSIS }}:${{ github.ref_name }}-${{ github.sha }}
+        
+        # Deploy analysis service to App Runner
+        aws apprunner create-service \
+          --service-name eternaljukebox-analysis \
+          --source-configuration '{
+            "ImageRepository": {
+              "ImageIdentifier": "'$IMAGE_URI'",
+              "ImageConfiguration": {
+                "Port": "5000",
+                "RuntimeEnvironmentVariables": {
+                  "FLASK_ENV": "production",
+                  "PYTHONPATH": "/app"
+                }
+              },
+              "ImageRepositoryType": "ECR"
+            },
+            "AutoDeploymentsEnabled": true
+          }' \
+          --instance-configuration '{
+            "Cpu": "2048",
+            "Memory": "4096"
+          }' \
+          --auto-scaling-configuration-arn arn:aws:apprunner:${{ env.AWS_REGION }}:${{ secrets.AWS_ACCOUNT_ID }}:autoscalingconfiguration/DefaultConfiguration/1/00000000000000000000000000000001
+
+    - name: Get App Runner service URLs
+      run: |
+        # Get main service URL
+        MAIN_URL=$(aws apprunner describe-service \
+          --service-arn $(aws apprunner list-services \
+            --query "ServiceSummaryList[?ServiceName=='eternaljukebox-main'].ServiceArn" \
+            --output text) \
+          --query 'Service.ServiceUrl' \
+          --output text)
+        
+        echo "🌐 Main service URL: $MAIN_URL"
+        echo "Main service URL: $MAIN_URL" >> $GITHUB_STEP_SUMMARY
+
+  deploy-to-elastic-beanstalk:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'staging' }}
+    if: github.event.inputs.deployment_target == 'elastic-beanstalk'
+    permissions:
+      contents: read
+      id-token: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Create Elastic Beanstalk application version
+      run: |
+        # Create application version for main service
+        aws elasticbeanstalk create-application-version \
+          --application-name eternaljukebox \
+          --version-label ${{ github.ref_name }}-${{ github.sha }} \
+          --description "Deployment from GitHub Actions" \
+          --source-bundle S3Bucket=${{ secrets.EB_S3_BUCKET }},S3Key=eternaljukebox-${{ github.ref_name }}-${{ github.sha }}.zip
+
+    - name: Deploy to Elastic Beanstalk
+      run: |
+        # Deploy to staging environment
+        aws elasticbeanstalk update-environment \
+          --environment-name eternaljukebox-${{ github.event.inputs.environment || 'staging' }} \
+          --version-label ${{ github.ref_name }}-${{ github.sha }}
+
+    - name: Wait for deployment to complete
+      run: |
+        aws elasticbeanstalk wait environment-updated \
+          --environment-names eternaljukebox-${{ github.event.inputs.environment || 'staging' }}
+
+    - name: Get Elastic Beanstalk URL
+      run: |
+        EB_URL=$(aws elasticbeanstalk describe-environments \
+          --environment-names eternaljukebox-${{ github.event.inputs.environment || 'staging' }} \
+          --query 'Environments[0].CNAME' \
+          --output text)
+        
+        echo "🌐 Elastic Beanstalk URL: http://$EB_URL"
+        echo "Elastic Beanstalk URL: http://$EB_URL" >> $GITHUB_STEP_SUMMARY
+
+  security-scan:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Run Trivy vulnerability scanner
+      uses: aquasecurity/trivy-action@master
+      with:
+        scan-type: 'fs'
+        scan-ref: '.'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+
+    - name: Upload Trivy scan results to GitHub Security tab
+      uses: github/codeql-action/upload-sarif@v2
+      if: always()
+      with:
+        sarif_file: 'trivy-results.sarif'
+
+  notify:
+    needs: [build-and-push, deploy-to-ecs, deploy-to-app-runner, deploy-to-elastic-beanstalk, security-scan]
+    runs-on: ubuntu-latest
+    if: always()
+    
+    steps:
+    - name: Deployment notification
+      run: |
+        if [ "${{ needs.deploy-to-ecs.result }}" == "success" ] || [ "${{ needs.deploy-to-app-runner.result }}" == "success" ] || [ "${{ needs.deploy-to-elastic-beanstalk.result }}" == "success" ]; then
+          echo "🎉 Deployment to AWS completed successfully!"
+          echo "Target: ${{ github.event.inputs.deployment_target || 'ecs' }}"
+          echo "Environment: ${{ github.event.inputs.environment || 'staging' }}"
+          echo "Region: ${{ env.AWS_REGION }}"
+        else
+          echo "❌ Deployment failed"
+          exit 1
+        fi

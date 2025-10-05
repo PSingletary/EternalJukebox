@@ -1,0 +1,23 @@
+version: 1.0
+runtime: docker
+build:
+  commands:
+    build:
+      - echo "Build completed for App Runner deployment"
+run:
+  runtime-version: latest
+  command: java -jar EternalJukebox-all.jar
+  network:
+    port: 8080
+    env: PORT
+  env:
+    - name: PORT
+      value: "8080"
+    - name: ANALYSIS_SERVICE_URL
+      value: "http://eternaljukebox-analysis:5000"
+    - name: STORAGE_TYPE
+      value: "LOCAL"
+    - name: DATABASE_TYPE
+      value: "H2"
+    - name: WORKER_EXECUTE_TIME
+      value: "1200000000000"

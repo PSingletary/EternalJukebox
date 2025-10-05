@@ -1,8 +1,5 @@
 # What port we're running on
 port: <port>
-# Spotify Client / Secret; make an application over here: https://developer.spotify.com/my-applications/
-spotifyClient: <spotifyClient>
-spotifySecret: <spotifySecret>
 
 # These can be any folders you want
 storageType: LOCAL
@@ -14,6 +11,12 @@ storageOptions:
   UPLOADED_ANALYSIS_FOLDER: data/uploaded_analysis
   PROFILE_FOLDER: data/profile
   LOG_FOLDER: data/log
+
+# Audio analysis service configuration
+analysisServiceUrl: http://localhost:5000
+
+# Security configuration
+jwtSecret: ${JWT_SECRET:-eternaljukebox-default-secret-key-change-in-production}
 
 # If not provided, local audio should work
 audioSourceType: YOUTUBE

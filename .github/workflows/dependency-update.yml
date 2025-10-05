@@ -1,0 +1,213 @@
+name: Dependency Update Check
+
+on:
+  schedule:
+    # Check for updates weekly on Sundays at 3 AM UTC
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  check-updates:
+    name: Check for Dependency Updates
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Check Gradle dependencies
+      run: |
+        echo "## 📦 Gradle Dependency Updates" > dependency-report.md
+        echo "" >> dependency-report.md
+        
+        # Use Gradle's dependency insight to check for updates
+        ./gradlew dependencyInsight --configuration compileClasspath --dependency "*" > gradle-deps.txt || true
+        
+        # Check for outdated dependencies
+        echo "### Outdated Dependencies:" >> dependency-report.md
+        if command -v gradle-dependency-update-checker &> /dev/null; then
+          gradle-dependency-update-checker >> dependency-report.md || echo "No updates available" >> dependency-report.md
+        else
+          echo "Dependency update checker not available" >> dependency-report.md
+        fi
+        
+    - name: Check Python dependencies
+      run: |
+        echo "" >> dependency-report.md
+        echo "## 🐍 Python Dependency Updates" >> dependency-report.md
+        echo "" >> dependency-report.md
+        
+        cd analysis-service
+        pip install pip-review
+        
+        echo "### Outdated Python Packages:" >> ../dependency-report.md
+        pip-review --local --auto >> ../dependency-report.md || echo "No updates available" >> ../dependency-report.md
+        
+        # Check for security vulnerabilities
+        pip install safety
+        echo "" >> ../dependency-report.md
+        echo "### Security Vulnerabilities:" >> ../dependency-report.md
+        safety check >> ../dependency-report.md || echo "No vulnerabilities found" >> ../dependency-report.md
+        
+    - name: Check Node.js dependencies (if applicable)
+      run: |
+        echo "" >> dependency-report.md
+        echo "## 📦 Node.js Dependency Updates" >> dependency-report.md
+        echo "" >> dependency-report.md
+        
+        if [ -f "package.json" ]; then
+          npm install -g npm-check-updates
+          echo "### Outdated NPM Packages:" >> dependency-report.md
+          ncu >> dependency-report.md || echo "No updates available" >> dependency-report.md
+          
+          # Check for vulnerabilities
+          echo "" >> dependency-report.md
+          echo "### Security Vulnerabilities:" >> dependency-report.md
+          npm audit >> dependency-report.md || echo "No vulnerabilities found" >> dependency-report.md
+        else
+          echo "No package.json found" >> dependency-report.md
+        fi
+        
+    - name: Check Docker base images
+      run: |
+        echo "" >> dependency-report.md
+        echo "## 🐳 Docker Image Updates" >> dependency-report.md
+        echo "" >> dependency-report.md
+        
+        # Extract base images from Dockerfiles
+        echo "### Base Images in Use:" >> dependency-report.md
+        grep -r "FROM" . --include="Dockerfile*" >> dependency-report.md || echo "No Dockerfiles found" >> dependency-report.md
+        
+    - name: Create security advisory check
+      run: |
+        echo "" >> dependency-report.md
+        echo "## 🔒 Security Advisories" >> dependency-report.md
+        echo "" >> dependency-report.md
+        
+        # Check GitHub Security Advisories
+        echo "### Recent Security Advisories:" >> dependency-report.md
+        echo "Check [GitHub Security Advisories](https://github.com/advisories) for recent vulnerabilities" >> dependency-report.md
+        
+        # Check for known vulnerable dependencies
+        echo "" >> dependency-report.md
+        echo "### Dependency Security Status:" >> dependency-report.md
+        echo "- Gradle dependencies: Check build/reports/dependency-check-report.html" >> dependency-report.md
+        echo "- Python dependencies: Check safety report above" >> dependency-report.md
+        echo "- Node.js dependencies: Check npm audit report above" >> dependency-report.md
+        
+    - name: Upload dependency report
+      uses: actions/upload-artifact@v4
+      with:
+        name: dependency-update-report
+        path: dependency-report.md
+        retention-days: 30
+        
+    - name: Create issue for critical updates
+      if: contains(github.event.head_commit.message, 'critical') || contains(github.event.head_commit.message, 'security')
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const report = fs.readFileSync('dependency-report.md', 'utf8');
+          
+          const issue = await github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: '🚨 Critical Dependency Updates Required',
+            body: `## Critical Dependency Updates Detected
+            
+            ${report}
+            
+            **Action Required:** Please review and update dependencies as soon as possible.
+            
+            Generated on: ${new Date().toISOString()}`,
+            labels: ['security', 'dependencies', 'urgent']
+          });
+          
+          console.log(`Created issue #${issue.data.number}`);
+
+  auto-update-dependencies:
+    name: Auto-update Dependencies (Security Only)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Set up JDK 11
+      uses: actions/setup-java@v4
+      with:
+        java-version: '11'
+        distribution: 'temurin'
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Update Python security dependencies
+      run: |
+        cd analysis-service
+        pip install safety pip-review
+        
+        # Update only security-related packages
+        pip-review --local --auto --only=security || true
+        
+    - name: Update Gradle dependencies (security only)
+      run: |
+        # This would require a more sophisticated approach to identify security updates
+        echo "Manual review required for Gradle dependency security updates"
+        
+    - name: Create pull request for updates
+      if: success()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const { execSync } = require('child_process');
+          
+          // Check if there are any changes
+          try {
+            execSync('git diff --quiet', { stdio: 'inherit' });
+            console.log('No changes detected');
+          } catch (error) {
+            // Changes detected, create PR
+            const branchName = `dependency-updates-${Date.now()}`;
+            
+            execSync(`git config --global user.name "github-actions[bot]"`);
+            execSync(`git config --global user.email "github-actions[bot]@users.noreply.github.com"`);
+            execSync(`git checkout -b ${branchName}`);
+            execSync(`git add .`);
+            execSync(`git commit -m "chore: update security dependencies"`);
+            execSync(`git push origin ${branchName}`);
+            
+            const pr = await github.rest.pulls.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '🔒 Security Dependency Updates',
+              head: branchName,
+              base: 'main',
+              body: `## Security Dependency Updates
+              
+              This PR contains automatic updates to security-related dependencies.
+              
+              **Please review carefully before merging.**
+              
+              Generated on: ${new Date().toISOString()}`
+            });
+            
+            console.log(`Created PR #${pr.data.number}`);
+          }

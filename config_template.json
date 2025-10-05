@@ -1,9 +1,6 @@
 {
   "portComment": "What port we're running on",
   "port": "<port>",
-  "spotifyClientComment": "Spotify Client / Secret; make an application over here: https://developer.spotify.com/my-applications/",
-  "spotifyClient": "<spotifyClient>",
-  "spotifySecret": "<spotifySecret>",
   "storageComment": "These can be any folders you want",
   "storageType": "LOCAL",
   "storageOptions": {
@@ -15,6 +12,10 @@
     "PROFILE_FOLDER": "data/profile",
     "LOG_FOLDER": "data/log"
   },
+  "analysisServiceComment": "Audio analysis service configuration",
+  "analysisServiceUrl": "http://localhost:5000",
+  "securityComment": "Security configuration",
+  "jwtSecret": "<JWT_SECRET>",
   "audioSourceComment": "If not provided, local audio should work",
   "audioSourceType": "YOUTUBE",
   "audioSourceOptions": {

@@ -1,8 +1,5 @@
 # What port we're running on
 port: ${PORT}
-# Spotify Client / Secret; make an application over here: https://developer.spotify.com/my-applications/
-spotifyClient: ${SPOTIFYCLIENT}
-spotifySecret: ${SPOTIFYSECRET}
 
 disable:
   # Would only create empty analytics files if not disabled because analyticsProviders is not set
@@ -21,6 +18,12 @@ storageOptions:
   UPLOADED_ANALYSIS_FOLDER: data/uploaded_analysis
   PROFILE_FOLDER: data/profile
   LOG_FOLDER: data/log
+
+# Audio analysis service configuration
+analysisServiceUrl: ${ANALYSIS_SERVICE_URL}
+
+# Security configuration
+jwtSecret: ${JWT_SECRET}
 
 # If not provided, local audio should work
 audioSourceType: YOUTUBE

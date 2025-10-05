@@ -1,0 +1,74 @@
+# Nuclei configuration for EternalJukebox security scanning
+# Custom templates and rules for web application security testing
+
+# Enable verbose output for better debugging
+verbose: true
+
+# Set timeout for requests
+timeout: 10
+
+# Set retry count for failed requests
+retries: 2
+
+# Custom headers for authentication testing
+headers:
+  - "User-Agent: EternalJukebox-Security-Scanner/1.0"
+  - "Accept: application/json"
+
+# Rate limiting to avoid overwhelming the target
+rate-limit: 150
+
+# Custom matchers for EternalJukebox specific endpoints
+matchers:
+  - name: "eternaljukebox-auth-endpoint"
+    type: word
+    words:
+      - "accessToken"
+      - "refreshToken"
+      - "Bearer"
+    part: body
+
+  - name: "eternaljukebox-analysis-endpoint"
+    type: word
+    words:
+      - "analysis"
+      - "audio"
+      - "yt-dlp"
+    part: body
+
+# Custom extractors for sensitive data
+extractors:
+  - name: "jwt-token-extractor"
+    type: regex
+    part: body
+    regex:
+      - '"accessToken":"([^"]+)"'
+      - '"refreshToken":"([^"]+)"'
+
+# Exclude certain paths from scanning
+exclude:
+  - "/static/"
+  - "/css/"
+  - "/js/"
+  - "/images/"
+
+# Custom payloads for EternalJukebox
+payloads:
+  - name: "eternaljukebox-urls"
+    values:
+      - "https://youtube.com/watch?v=test"
+      - "https://soundcloud.com/track/test"
+      - "https://bandcamp.com/track/test"
+      - "file:///etc/passwd"
+      - "https://192.168.1.1/admin"
+
+# Severity levels
+severity:
+  - critical
+  - high
+  - medium
+  - low
+  - info
+
+# Output format
+output: nuclei-results.txt

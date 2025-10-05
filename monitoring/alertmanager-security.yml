@@ -1,0 +1,303 @@
+# EternalJukebox Security Alerting Configuration
+# This configuration handles security-specific alerting and incident response
+
+global:
+  smtp_smarthost: 'localhost:587'
+  smtp_from: 'security-alerts@eternaljukebox.local'
+  smtp_auth_username: 'security-alerts@eternaljukebox.local'
+  smtp_auth_password: 'security-password'
+
+# Security-specific routing
+route:
+  group_by: ['alertname', 'category', 'severity']
+  group_wait: 5s
+  group_interval: 5s
+  repeat_interval: 30m
+  receiver: 'security-webhook'
+  routes:
+    # Critical security alerts - immediate notification
+    - match:
+        severity: critical
+        category: security
+      receiver: 'critical-security-alerts'
+      group_wait: 0s
+      repeat_interval: 5m
+      
+    # Authentication security alerts
+    - match:
+        service: authentication
+        category: security
+      receiver: 'auth-security-alerts'
+      group_wait: 10s
+      repeat_interval: 15m
+      
+    # Injection attack alerts
+    - match:
+        service: input-validation
+        category: security
+      receiver: 'injection-security-alerts'
+      group_wait: 0s
+      repeat_interval: 10m
+      
+    # Network security alerts
+    - match:
+        service: network-security
+        category: security
+      receiver: 'network-security-alerts'
+      group_wait: 15s
+      repeat_interval: 20m
+      
+    # Data security alerts
+    - match:
+        service: data-security
+        category: security
+      receiver: 'data-security-alerts'
+      group_wait: 0s
+      repeat_interval: 5m
+      
+    # System security alerts
+    - match:
+        service: system-security
+        category: security
+      receiver: 'system-security-alerts'
+      group_wait: 0s
+      repeat_interval: 5m
+      
+    # Compliance alerts
+    - match:
+        service: compliance
+        category: security
+      receiver: 'compliance-alerts'
+      group_wait: 30s
+      repeat_interval: 1h
+
+# Security-specific inhibition rules
+inhibit_rules:
+  # Mute warning security alerts if critical security alert is firing
+  - source_match:
+      severity: 'critical'
+      category: 'security'
+    target_match:
+      severity: 'warning'
+      category: 'security'
+    equal: ['alertname', 'service']
+
+  # Mute individual attack alerts if brute force attack is detected
+  - source_match:
+      alertname: 'EternalJukeboxBruteForceAttack'
+    target_match_re:
+      alertname: 'EternalJukeboxFailedAuthAttempts'
+    equal: ['service']
+
+  # Mute individual injection alerts if multiple injection types are detected
+  - source_match:
+      alertname: 'EternalJukeboxSQLInjectionAttempts'
+    target_match_re:
+      alertname: 'EternalJukeboxXSSAttempts|EternalJukeboxSSRFAttempts'
+    equal: ['service']
+
+# Security-specific receivers
+receivers:
+  # Default security webhook
+  - name: 'security-webhook'
+    webhook_configs:
+      - url: 'http://localhost:5001/security-webhook'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: 'security-webhook'
+            password: 'security-webhook-password'
+
+  # Critical security alerts - immediate notification via multiple channels
+  - name: 'critical-security-alerts'
+    email_configs:
+      - to: 'security-team@eternaljukebox.local'
+        subject: '[CRITICAL SECURITY] EternalJukebox Security Alert: {{ .GroupLabels.alertname }}'
+        body: |
+          🚨 CRITICAL SECURITY ALERT 🚨
+          
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Severity: {{ .Labels.severity }}
+          Category: {{ .Labels.category }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          
+          IMMEDIATE ACTION REQUIRED!
+          
+          Please investigate and respond according to the security incident response procedures.
+        headers:
+          X-Priority: '1'
+          X-Security-Alert: 'critical'
+    
+    webhook_configs:
+      - url: 'http://localhost:5001/security-webhook/critical'
+        send_resolved: true
+        http_config:
+          basic_auth:
+            username: 'security-webhook'
+            password: 'security-webhook-password'
+    
+    slack_configs:
+      - api_url: 'https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK'
+        channel: '#security-alerts'
+        title: '🚨 Critical Security Alert'
+        text: |
+          *Alert:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Service:* {{ .Labels.service }}
+          *Time:* {{ .StartsAt }}
+          
+          *IMMEDIATE ACTION REQUIRED!*
+
+  # Authentication security alerts
+  - name: 'auth-security-alerts'
+    email_configs:
+      - to: 'auth-security@eternaljukebox.local'
+        subject: '[AUTH SECURITY] {{ .GroupLabels.alertname }}'
+        body: |
+          Authentication Security Alert
+          
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          
+          Please review authentication logs and consider implementing additional security measures.
+    
+    webhook_configs:
+      - url: 'http://localhost:5001/security-webhook/auth'
+        send_resolved: true
+
+  # Injection attack alerts
+  - name: 'injection-security-alerts'
+    email_configs:
+      - to: 'injection-security@eternaljukebox.local'
+        subject: '[INJECTION ATTACK] {{ .GroupLabels.alertname }}'
+        body: |
+          🚨 INJECTION ATTACK DETECTED 🚨
+          
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          
+          IMMEDIATE INVESTIGATION REQUIRED!
+          
+          This may indicate an active attack attempt. Please:
+          1. Review input validation logs
+          2. Check for successful exploitation
+          3. Consider blocking the source IP
+          4. Update security rules if necessary
+        headers:
+          X-Priority: '1'
+          X-Security-Alert: 'injection-attack'
+    
+    webhook_configs:
+      - url: 'http://localhost:5001/security-webhook/injection'
+        send_resolved: true
+
+  # Network security alerts
+  - name: 'network-security-alerts'
+    email_configs:
+      - to: 'network-security@eternaljukebox.local'
+        subject: '[NETWORK SECURITY] {{ .GroupLabels.alertname }}'
+        body: |
+          Network Security Alert
+          
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          
+          Please review network access logs and consider implementing additional network security measures.
+    
+    webhook_configs:
+      - url: 'http://localhost:5001/security-webhook/network'
+        send_resolved: true
+
+  # Data security alerts
+  - name: 'data-security-alerts'
+    email_configs:
+      - to: 'data-security@eternaljukebox.local'
+        subject: '[DATA SECURITY] {{ .GroupLabels.alertname }}'
+        body: |
+          🚨 DATA SECURITY ALERT 🚨
+          
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          
+          IMMEDIATE INVESTIGATION REQUIRED!
+          
+          This may indicate unauthorized access to sensitive data. Please:
+          1. Review data access logs
+          2. Check for data exfiltration
+          3. Consider implementing additional data protection measures
+          4. Notify data protection officer if required
+        headers:
+          X-Priority: '1'
+          X-Security-Alert: 'data-security'
+    
+    webhook_configs:
+      - url: 'http://localhost:5001/security-webhook/data'
+        send_resolved: true
+
+  # System security alerts
+  - name: 'system-security-alerts'
+    email_configs:
+      - to: 'system-security@eternaljukebox.local'
+        subject: '[SYSTEM SECURITY] {{ .GroupLabels.alertname }}'
+        body: |
+          🚨 SYSTEM SECURITY ALERT 🚨
+          
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          
+          IMMEDIATE INVESTIGATION REQUIRED!
+          
+          This may indicate system compromise. Please:
+          1. Review system logs
+          2. Check for privilege escalation
+          3. Consider isolating affected systems
+          4. Implement additional system security measures
+        headers:
+          X-Priority: '1'
+          X-Security-Alert: 'system-security'
+    
+    webhook_configs:
+      - url: 'http://localhost:5001/security-webhook/system'
+        send_resolved: true
+
+  # Compliance alerts
+  - name: 'compliance-alerts'
+    email_configs:
+      - to: 'compliance@eternaljukebox.local'
+        subject: '[COMPLIANCE] {{ .GroupLabels.alertname }}'
+        body: |
+          Compliance Alert
+          
+          Alert: {{ .Annotations.summary }}
+          Description: {{ .Annotations.description }}
+          Service: {{ .Labels.service }}
+          Instance: {{ .Labels.instance }}
+          Time: {{ .StartsAt }}
+          
+          Please review compliance requirements and ensure proper documentation.
+    
+    webhook_configs:
+      - url: 'http://localhost:5001/security-webhook/compliance'
+        send_resolved: true
+
+# Security-specific templates
+templates:
+  - '/etc/alertmanager/security-templates/*.tmpl'

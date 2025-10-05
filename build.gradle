@@ -1,5 +1,3 @@
-import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-
 plugins {
     id 'application'
     id 'org.jetbrains.kotlin.jvm' version '1.9.25'
@@ -36,11 +34,18 @@ dependencies {
     implementation "com.h2database:h2:1.4.196"
     implementation 'com.mysql:mysql-connector-j:9.0.0'
     implementation 'com.zaxxer:HikariCP:5.1.0'
-    implementation 'com.google.cloud.sql:mysql-socket-factory-connector-j-8:1.20.0'
-
-    implementation 'com.auth0:java-jwt:4.4.0'
+    // Removed: com.google.cloud.sql:mysql-socket-factory-connector-j-8 (Spotify-specific)
+    // Removed: com.auth0:java-jwt (Spotify authentication)
     implementation 'com.github.kittinunf.fuel:fuel:2.3.1'
     implementation 'com.github.kittinunf.fuel:fuel-coroutines:2.3.1'
+
+    // Security dependencies
+    implementation 'io.jsonwebtoken:jjwt-api:0.12.3'
+    implementation 'io.jsonwebtoken:jjwt-impl:0.12.3'
+    implementation 'io.jsonwebtoken:jjwt-jackson:0.12.3'
+    implementation 'io.vertx:vertx-auth-jwt:3.9.16'
+    implementation 'io.vertx:vertx-auth-common:3.9.16'
+    implementation 'org.mindrot:jbcrypt:0.4'
 
     implementation 'ch.qos.logback:logback-classic:1.5.7'
 
@@ -59,9 +64,75 @@ dependencies {
 
     implementation "com.github.teamnewpipe.NewPipeExtractor:extractor:$new_pipe_extractor_version"
     implementation "com.github.teamnewpipe.NewPipeExtractor:timeago-parser:$new_pipe_extractor_version"
+
+    // Test dependencies
+    testImplementation "org.jetbrains.kotlin:kotlin-test:$kotlin_version"
+    testImplementation "org.jetbrains.kotlin:kotlin-test-junit:$kotlin_version"
+    testImplementation "io.vertx:vertx-junit5:$vertx_version"
+    testImplementation "io.vertx:vertx-web-client:$vertx_version"
+    testImplementation "org.junit.jupiter:junit-jupiter:5.10.1"
+    testImplementation "org.junit.jupiter:junit-jupiter-api:5.10.1"
+    testImplementation "org.junit.jupiter:junit-jupiter-engine:5.10.1"
+    testImplementation "org.junit.jupiter:junit-jupiter-params:5.10.1"
+    testImplementation "org.mockito:mockito-core:5.8.0"
+    testImplementation "org.mockito:mockito-junit-jupiter:5.8.0"
+    testImplementation "org.assertj:assertj-core:3.25.3"
+
+    // Security testing dependencies
+    testImplementation "com.github.spotbugs:spotbugs-annotations:4.8.3"
+    testImplementation "com.github.spotbugs:spotbugs:4.8.3"
+    testImplementation "org.owasp:dependency-check-gradle:8.4.3"
 }
 
-tasks.withType(KotlinCompile).configureEach {
+// Security testing configuration
+apply plugin: 'com.github.spotbugs'
+apply plugin: 'org.owasp.dependencycheck'
+
+spotbugs {
+    toolVersion = '4.8.3'
+    effort = 'max'
+    reportLevel = 'low'
+    excludeFilter = file('spotbugs-exclude.xml')
+}
+
+spotbugsMain {
+    reports {
+        html {
+            enabled = true
+            destination = file("$buildDir/reports/spotbugs/main.html")
+        }
+        xml {
+            enabled = true
+            destination = file("$buildDir/reports/spotbugs/main.xml")
+        }
+    }
+}
+
+spotbugsTest {
+    reports {
+        html {
+            enabled = true
+            destination = file("$buildDir/reports/spotbugs/test.html")
+        }
+        xml {
+            enabled = true
+            destination = file("$buildDir/reports/spotbugs/test.xml")
+        }
+    }
+}
+
+dependencyCheck {
+    format = 'ALL'
+    suppressionFile = 'dependency-check-suppressions.xml'
+    failBuildOnCVSS = 7
+    analyzers {
+        assemblyEnabled = false
+        nugetconfEnabled = false
+        nodeEnabled = false
+    }
+}
+
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
     kotlinOptions {
         jvmTarget = '11'
     }

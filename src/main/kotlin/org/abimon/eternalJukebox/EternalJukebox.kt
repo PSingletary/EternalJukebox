@@ -14,7 +14,7 @@ import io.vertx.core.VertxOptions
 import io.vertx.core.http.HttpServer
 import io.vertx.ext.web.Router
 import org.abimon.eternalJukebox.data.analysis.IAnalyser
-import org.abimon.eternalJukebox.data.analysis.SpotifyAnalyser
+import org.abimon.eternalJukebox.data.analysis.GenericAnalyser
 import org.abimon.eternalJukebox.data.analytics.IAnalyticsProvider
 import org.abimon.eternalJukebox.data.analytics.IAnalyticsStorage
 import org.abimon.eternalJukebox.data.audio.IAudioSource
@@ -26,6 +26,9 @@ import org.abimon.eternalJukebox.handlers.api.*
 import org.abimon.eternalJukebox.objects.ConstantValues
 import org.abimon.eternalJukebox.objects.EmptyDataAPI
 import org.abimon.eternalJukebox.objects.JukeboxConfig
+import org.abimon.eternalJukebox.security.SecurityConfig
+import org.abimon.eternalJukebox.security.AuthHandler
+import io.vertx.ext.auth.jwt.JWTAuth
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -63,7 +66,7 @@ object EternalJukebox {
     val storage: IStorage
     val audio: IAudioSource?
 
-    val spotify: IAnalyser
+    val analyser: IAnalyser
 
     val analytics: IAnalyticsStorage
     val analyticsProviders: List<IAnalyticsProvider>
@@ -153,6 +156,16 @@ object EternalJukebox {
 
         val apiRouter = Router.router(vertx)
 
+        // Setup security middleware
+        SecurityConfig.setupSecurityMiddleware(mainRouter)
+        
+        // Setup JWT authentication
+        val jwtAuth = SecurityConfig.createJWTAuth()
+        SecurityConfig.setupAuthMiddleware(apiRouter, jwtAuth)
+        
+        // Setup authentication routes
+        AuthHandler.setup(mainRouter)
+
         if (isEnabled("analysisAPI"))
             apis.add(AnalysisAPI)
 
@@ -184,8 +197,8 @@ object EternalJukebox {
             audio = EmptyDataAPI
         }
 
-        spotify = if (isEnabled("audioAPI") || isEnabled("analysisAPI"))
-            SpotifyAnalyser
+        analyser = if (isEnabled("audioAPI") || isEnabled("analysisAPI"))
+            GenericAnalyser
         else
             EmptyDataAPI
 

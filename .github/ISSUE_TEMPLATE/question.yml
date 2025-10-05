@@ -1,0 +1,76 @@
+name: General Question
+description: Ask a general question about EternalJukebox
+title: "[QUESTION] "
+labels: ["question", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your question! This template is for general questions about EternalJukebox.
+        
+        **Security Notice**: If your question involves security vulnerabilities, please DO NOT create a public issue. Instead, report it privately to security@eternaljukebox.com.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Question Category
+      description: What category does your question fall under?
+      options:
+        - Installation & Setup
+        - Configuration
+        - Usage & Features
+        - Troubleshooting
+        - Performance
+        - Integration
+        - Development
+        - Deployment
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Your Question
+      description: What would you like to know?
+      placeholder: Please describe your question clearly...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide context about your situation
+      placeholder: |
+        - What are you trying to accomplish?
+        - What version of EternalJukebox are you using?
+        - What environment are you running in?
+        - Any relevant background information
+
+  - type: textarea
+    id: research
+    attributes:
+      label: Research Done
+      description: What have you already tried or researched?
+      placeholder: |
+        - Documentation consulted
+        - Previous attempts
+        - Related issues or discussions
+        - External resources reviewed
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Information
+      description: Any other relevant information
+      placeholder: Screenshots, logs, configuration files, or other details that might help...
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

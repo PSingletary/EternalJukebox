@@ -1,0 +1,100 @@
+name: Documentation Issue
+description: Report documentation problems or suggest improvements
+title: "[DOCS] "
+labels: ["documentation", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for helping improve our documentation! Please fill out the form below to help us understand the documentation issue.
+
+  - type: dropdown
+    id: doc_type
+    attributes:
+      label: Documentation Type
+      description: What type of documentation is affected?
+      options:
+        - README
+        - Installation Guide
+        - Configuration Guide
+        - API Documentation
+        - Security Documentation
+        - Deployment Guide
+        - Troubleshooting Guide
+        - Code Comments
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: page_url
+    attributes:
+      label: Documentation Page/File
+      description: Which page or file has the issue?
+      placeholder: e.g., README.md, deployment/DEPLOYMENT_GUIDE.md, or URL
+
+  - type: dropdown
+    id: issue_type
+    attributes:
+      label: Issue Type
+      description: What type of documentation issue is this?
+      options:
+        - Unclear or confusing text
+        - Missing information
+        - Incorrect information
+        - Outdated information
+        - Broken links
+        - Formatting issues
+        - Translation needed
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Issue Description
+      description: Describe the documentation issue
+      placeholder: What's wrong with the documentation? What needs to be improved?
+    validations:
+      required: true
+
+  - type: textarea
+    id: current_text
+    attributes:
+      label: Current Text (if applicable)
+      description: Copy the current problematic text
+      placeholder: Paste the current text that needs improvement...
+
+  - type: textarea
+    id: suggested_text
+    attributes:
+      label: Suggested Improvement
+      description: How should the documentation be improved?
+      placeholder: Describe or provide the improved text...
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: How does this documentation issue affect users?
+      placeholder: |
+        - Does it prevent users from completing tasks?
+        - Does it cause confusion?
+        - Does it lead to incorrect configurations?
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other relevant information
+      placeholder: Screenshots, related issues, or other context...
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

@@ -2,9 +2,34 @@
 
 var selectedSongs = [];
 
+// Security functions
+function sanitizeInput(input) {
+    if (!input) return '';
+    return input.replace(/[<>\"'&]/g, '')  // Remove HTML/XML characters
+                .replace(/[\x00-\x1F\x7F]/g, '')  // Remove control characters
+                .trim();
+}
+
+function validateUrl(url) {
+    try {
+        var urlObj = new URL(url);
+        var allowedHosts = [
+            'youtube.com', 'www.youtube.com', 'youtu.be',
+            'soundcloud.com', 'www.soundcloud.com',
+            'bandcamp.com', 'www.bandcamp.com',
+            'vimeo.com', 'www.vimeo.com',
+            'localhost', '127.0.0.1'
+        ];
+        return allowedHosts.includes(urlObj.hostname.toLowerCase());
+    } catch (e) {
+        return false;
+    }
+}
+
 function searchForTrack() {
     console.log("search for a track");
-    var q = $("#search").val();
+    var rawQuery = $("#search").val();
+    var q = sanitizeInput(rawQuery);
     console.log(q);
 
     if (q.length > 0) {
@@ -59,18 +84,23 @@ function getTitle(title, artist, url) {
 }
 
 function goDirect() {
-    var spotify = $("#direct-spotify").val();
-    var match = spotify.match(/spotify.com\/(?:intl-[a-zA-Z-]+\/)?track\/([^\/?]+)/);
-    if (match === null) {
-        alert("Please enter a valid Spotify song share link (open.spotify.com/track/<id>)");
+    var rawUrl = $("#direct-url").val().trim();
+    var url = sanitizeInput(rawUrl);
+    
+    if (!url) {
+        alert("Please enter a valid URL (YouTube, SoundCloud, Bandcamp, Vimeo, etc.)");
         return;
     }
-    var params = new URLSearchParams({id: match[1]});
-    var audioValue = $("#direct-audio").val().trim();
-    if (audioValue) {
-        params.append('audio', audioValue);
+    
+    // Validate URL format and security
+    if (!validateUrl(url)) {
+        alert("Please enter a valid URL from supported platforms (YouTube, SoundCloud, Bandcamp, Vimeo, etc.)");
+        return;
     }
-    window.location.href = "{% if page.app == 'jukebox' %}jukebox{% elsif page.app == 'canonizer' %}canonizer{% endif %}_go.html?" + params.toString();
+    
+    // Call the new /analyse/url endpoint
+    var params = new URLSearchParams({url: url});
+    window.location.href = "{% if page.app == 'jukebox' %}jukebox{% elsif page.app == 'canonizer' %}canonizer{% endif %}_go.html?url=" + encodeURIComponent(url);
 }
 
 function init() {
@@ -88,13 +118,7 @@ function init() {
         goDirect();
     });
 
-    $("#direct-spotify").keyup(function (e) {
-        if (e.keyCode == 13) {
-            goDirect();
-        }
-    });
-
-    $("#direct-audio").keyup(function (e) {
+    $("#direct-url").keyup(function (e) {
         if (e.keyCode == 13) {
             goDirect();
         }

@@ -5,6 +5,8 @@ services:
     build:
       context: .
       dockerfile: ./Dockerfile.dev
+    networks:
+      - internal
     ports:
       - 5005:5005
       - 8080:8080
@@ -12,7 +14,31 @@ services:
       - .env
     environment:
       - JAVA_TOOL_OPTIONS="-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5005"
+      - ANALYSIS_SERVICE_URL=http://analysis-service-dev:5000
     volumes:
       - './envvar_config.yaml:/EternalJukebox/envvar_config.yaml'
       - './data:/EternalJukebox/data'
       - './build/libs/EternalJukebox-all.jar:/EternalJukebox/EternalJukebox-all.jar'
+    depends_on:
+      - analysis-service-dev
+
+  analysis-service-dev:
+    build:
+      context: ./analysis-service
+      dockerfile: Dockerfile
+    networks:
+      - internal
+    ports:
+      - 5001:5000
+    environment:
+      - FLASK_ENV=development
+      - PYTHONPATH=/app
+      - FLASK_DEBUG=1
+    volumes:
+      - './data/analysis:/tmp/audio_uploads'
+      - './analysis-service:/app'
+    command: ["python", "-m", "flask", "run", "--host=0.0.0.0", "--port=5000", "--debug"]
+
+networks:
+  internal:
+    driver: bridge

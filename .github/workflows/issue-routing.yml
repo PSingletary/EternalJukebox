@@ -1,0 +1,224 @@
+# EternalJukebox Issue Routing Bot
+
+This GitHub Action automatically routes issues to appropriate channels and provides guidance to users.
+
+name: Issue Routing
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  route-issues:
+    runs-on: ubuntu-latest
+    if: github.event.issue.state == 'open'
+    
+    steps:
+      - name: Check for security keywords
+        id: security-check
+        run: |
+          ISSUE_TITLE="${{ github.event.issue.title }}"
+          ISSUE_BODY="${{ github.event.issue.body }}"
+          
+          # Security-related keywords that should trigger private reporting
+          SECURITY_KEYWORDS=(
+            "vulnerability" "exploit" "security flaw" "security bug" 
+            "injection" "xss" "csrf" "sql injection" "buffer overflow"
+            "privilege escalation" "unauthorized access" "data breach"
+            "authentication bypass" "authorization bypass" "session hijacking"
+            "malware" "virus" "trojan" "backdoor" "rootkit"
+            "cve-" "cve " "security advisory" "0-day" "zero-day"
+          )
+          
+          # Check if issue contains security keywords
+          SECURITY_DETECTED=false
+          for keyword in "${SECURITY_KEYWORDS[@]}"; do
+            if echo "$ISSUE_TITLE $ISSUE_BODY" | grep -qi "$keyword"; then
+              SECURITY_DETECTED=true
+              break
+            fi
+          done
+          
+          echo "security_detected=$SECURITY_DETECTED" >> $GITHUB_OUTPUT
+
+      - name: Comment on potential security issues
+        if: steps.security-check.outputs.security_detected == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const comment = `## ⚠️ Security Issue Detected
+            
+            This issue appears to contain security-related content. For security vulnerabilities, please:
+            
+            **DO NOT** discuss security vulnerabilities in public issues.
+            
+            Instead, please:
+            1. **Close this issue** immediately
+            2. **Report privately** to: security@eternaljukebox.com
+            3. **Use GitHub Security Advisories** for responsible disclosure
+            
+            ### Why?
+            - Prevents exploitation of vulnerabilities
+            - Allows proper security response process
+            - Protects users from potential attacks
+            - Follows responsible disclosure practices
+            
+            ### What to include in private reports:
+            - Detailed description of the vulnerability
+            - Steps to reproduce
+            - Potential impact
+            - Environment details
+            - Suggested fixes (if any)
+            
+            Thank you for helping keep EternalJukebox secure! 🔒`;
+            
+            await github.rest.issues.createComment({
+              issue_number: issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+            
+            // Add security label
+            await github.rest.issues.addLabels({
+              issue_number: issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['security', 'needs-private-reporting']
+            });
+
+      - name: Route non-security issues
+        if: steps.security-check.outputs.security_detected == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title.toLowerCase();
+            const body = issue.body.toLowerCase();
+            
+            // Determine issue category and add appropriate labels
+            let labels = [];
+            let comment = '';
+            
+            if (title.includes('[bug]') || title.includes('bug') || 
+                body.includes('error') || body.includes('not working') || 
+                body.includes('broken') || body.includes('issue')) {
+              labels.push('bug', 'needs-triage');
+              comment = `## 🐛 Bug Report Detected
+            
+            Thanks for reporting this bug! I've automatically categorized this as a bug report.
+            
+            **Next steps:**
+            - Our team will triage this issue
+            - We may ask for additional information
+            - Please provide any requested logs or details
+            
+            **Help us help you:**
+            - Include steps to reproduce
+            - Provide environment details
+            - Share relevant logs (if any)
+            
+            Thank you for helping improve EternalJukebox! 🚀`;
+            }
+            else if (title.includes('[feature]') || title.includes('feature') || 
+                     title.includes('enhancement') || title.includes('request')) {
+              labels.push('enhancement', 'needs-triage');
+              comment = `## ✨ Feature Request Detected
+            
+            Thanks for suggesting this feature! I've automatically categorized this as a feature request.
+            
+            **Next steps:**
+            - Our team will review this request
+            - We'll discuss feasibility and priority
+            - Community feedback will be considered
+            
+            **Help us understand:**
+            - What problem does this solve?
+            - How would you use this feature?
+            - Any alternative solutions considered?
+            
+            Thank you for contributing to EternalJukebox! 💡`;
+            }
+            else if (title.includes('[security]') || title.includes('security')) {
+              labels.push('security', 'question', 'needs-triage');
+              comment = `## 🔒 Security Question Detected
+            
+            Thanks for your security question! I've automatically categorized this as a security discussion.
+            
+            **Note:** This appears to be a general security question, not a vulnerability report.
+            
+            **Next steps:**
+            - Our security team will review
+            - We'll provide guidance and best practices
+            - Community input is welcome
+            
+            **Security resources:**
+            - Check our [Security Documentation](SECURITY.md)
+            - Review [Security Best Practices](security/)
+            - For vulnerabilities: security@eternaljukebox.com
+            
+            Thank you for prioritizing security! 🛡️`;
+            }
+            else if (title.includes('[docs]') || title.includes('documentation')) {
+              labels.push('documentation', 'needs-triage');
+              comment = `## 📚 Documentation Issue Detected
+            
+            Thanks for helping improve our documentation! I've automatically categorized this as a documentation issue.
+            
+            **Next steps:**
+            - Our team will review the documentation
+            - We'll update unclear or missing information
+            - Community contributions are welcome
+            
+            **Help us improve:**
+            - Specify which documentation is unclear
+            - Suggest specific improvements
+            - Provide examples of better wording
+            
+            Thank you for helping make our docs better! 📖`;
+            }
+            else {
+              labels.push('question', 'needs-triage');
+              comment = `## ❓ General Question Detected
+            
+            Thanks for your question! I've automatically categorized this as a general question.
+            
+            **Next steps:**
+            - Our team will review and respond
+            - Community members may also help
+            - We'll provide guidance and resources
+            
+            **Help us help you:**
+            - Be specific about your question
+            - Include relevant context
+            - Mention what you've already tried
+            
+            Thank you for reaching out! 🤝`;
+            }
+            
+            // Add labels
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                issue_number: issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                labels: labels
+              });
+            }
+            
+            // Add helpful comment
+            if (comment) {
+              await github.rest.issues.createComment({
+                issue_number: issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: comment
+              });
+            }
+
+      - name: Log routing decision
+        run: |
+          echo "Issue #${{ github.event.issue.number }} routed successfully"
+          echo "Security detected: ${{ steps.security-check.outputs.security_detected }}"
+          echo "Issue title: ${{ github.event.issue.title }}"
