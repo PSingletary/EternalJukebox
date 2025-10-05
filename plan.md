@@ -286,7 +286,7 @@ Create GitHub Actions workflows for automated deployment to:
 - [x] **Todo 2**: Remove Spotify dependencies from Kotlin backend code ✅ COMPLETED
 - [x] **Todo 3**: Create GenericAnalyser to replace SpotifyAnalyser ✅ COMPLETED
 - [x] **Todo 4**: Update audio source system to support any yt-dlp URL ✅ COMPLETED
-- [ ] **Todo 5**: Modify AnalysisAPI to integrate with Python service
+- [x] **Todo 5**: Modify AnalysisAPI to integrate with Python service ✅ COMPLETED
 
 ### Frontend & Infrastructure (Todos 6-8)
 - [ ] **Todo 6**: Update frontend for generic URL input and remove Spotify references
@@ -498,7 +498,7 @@ Next: After completing, update plan.md changelog and mark all todos complete.
 
 ## 🚀 **PROGRESS SUMMARY - 75% Context Used**
 
-### **✅ COMPLETED (4/13 todos)**
+### **✅ COMPLETED (5/13 todos)**
 - **Todo 1**: Python audio analysis microservice with librosa
   - Created complete `analysis-service/` directory
   - Implemented Flask REST API with librosa analysis
@@ -523,6 +523,13 @@ Next: After completing, update plan.md changelog and mark all todos complete.
   - Updated ID extraction logic for multi-platform support (YouTube, SoundCloud, Bandcamp, Vimeo, etc.)
   - Enhanced GenericAnalyser with platform detection and URL parsing
   - Support for 1800+ platforms via yt-dlp integration
+- **Todo 5**: Modify AnalysisAPI to integrate with Python service
+  - Updated /analyse/:id endpoint to call Python analysis service
+  - Added /analyse/url endpoint for direct URL input
+  - Updated search endpoint to use GenericAnalyser instead of Spotify
+  - Added analysis generation logic using Python service
+  - Enhanced error handling for analysis service unavailability
+  - Implemented caching of generated analysis in storage
 
 ### **🔧 INFRASTRUCTURE FIXES**
 - Fixed build.gradle KotlinCompile import issues
@@ -533,7 +540,7 @@ Next: After completing, update plan.md changelog and mark all todos complete.
 ### **📊 CURRENT STATUS**
 - **Branch**: `llm` (active development branch)
 - **Pull Request**: #1 created and ready for implementation
-- **Next Todo**: Todo 5 - Modify AnalysisAPI to integrate with Python service
+- **Next Todo**: Todo 6 - Update frontend for generic URL input and remove Spotify references
 - **Files Ready**: Python analysis service fully implemented
 
 ---
