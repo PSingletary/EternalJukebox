@@ -45,22 +45,22 @@ If you want to change the port from 8080, edit `docker-compose.yml` port, to be 
 
 ## New Features
 
-### 🎵 **Enhanced Audio Source Support**
+### Enhanced Audio Source Support
 - **1800+ Platforms**: Support for YouTube, SoundCloud, Bandcamp, Vimeo, and many more via yt-dlp
 - **Direct URL Input**: Simply paste any supported audio URL to create endless loops
 - **No API Keys Required**: Most audio sources work without authentication
 
-### 🧠 **Advanced Audio Analysis**
+### Advanced Audio Analysis
 - **librosa-based Analysis**: Modern Python microservice for accurate beat, bar, and segment detection
 - **Real-time Generation**: Automatic audio analysis for any supported source
 - **Cached Results**: Fast performance with intelligent caching
 
-### 🐳 **Docker Integration**
+### Docker Integration
 - **Multi-service Architecture**: Separate containers for main app and analysis service
 - **Health Monitoring**: Automatic health checks and service discovery
 - **Development Support**: Hot-reload development environment
 
-### 📋 **Configuration**
+### Configuration
 The application now uses an `analysisServiceUrl` configuration option:
 ```yaml
 analysisServiceUrl: http://localhost:5000

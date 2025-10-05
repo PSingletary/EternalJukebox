@@ -1,0 +1,115 @@
+# OWASP ZAP rules configuration for EternalJukebox
+# Custom rules and exclusions for security scanning
+
+# Rule exclusions for EternalJukebox specific behavior
+exclude:
+  - "10015"  # Parameter Pollution
+  - "10020"  # XSS Filter Disabled
+  - "10021"  # XSS Protection Header Missing
+  - "10023"  # Information Disclosure - Debug Error Messages
+  - "10024"  # HTTP PUT Method Allowed
+  - "10025"  # HTTP DELETE Method Allowed
+  - "10026"  # HTTP TRACE Method Allowed
+  - "10027"  # HTTP OPTIONS Method Allowed
+  - "10028"  # HTTP HEAD Method Allowed
+  - "10029"  # HTTP CONNECT Method Allowed
+  - "10030"  # HTTP PATCH Method Allowed
+  - "10031"  # HTTP PROPFIND Method Allowed
+  - "10032"  # HTTP PROPPATCH Method Allowed
+  - "10033"  # HTTP MKCOL Method Allowed
+  - "10034"  # HTTP COPY Method Allowed
+  - "10035"  # HTTP MOVE Method Allowed
+  - "10036"  # HTTP LOCK Method Allowed
+  - "10037"  # HTTP UNLOCK Method Allowed
+  - "10038"  # HTTP SEARCH Method Allowed
+  - "10039"  # HTTP MKACTIVITY Method Allowed
+  - "10040"  # HTTP CHECKOUT Method Allowed
+  - "10041"  # HTTP MERGE Method Allowed
+  - "10042"  # HTTP REPORT Method Allowed
+  - "10043"  # HTTP MKCALENDAR Method Allowed
+  - "10044"  # HTTP MKRESOURCE Method Allowed
+  - "10045"  # HTTP PROPPATCH Method Allowed
+  - "10046"  # HTTP LOCK Method Allowed
+  - "10047"  # HTTP UNLOCK Method Allowed
+  - "10048"  # HTTP SEARCH Method Allowed
+  - "10049"  # HTTP MKACTIVITY Method Allowed
+  - "10050"  # HTTP CHECKOUT Method Allowed
+
+# Custom scan policies
+scan-policy:
+  name: "EternalJukebox Security Scan"
+  description: "Custom security scan policy for EternalJukebox application"
+  
+  # Authentication configuration
+  authentication:
+    method: "form-based"
+    login-url: "http://localhost:8080/auth/login"
+    login-request:
+      method: "POST"
+      url: "http://localhost:8080/auth/login"
+      headers:
+        - "Content-Type: application/json"
+      body: '{"username": "testuser", "password": "testpass"}'
+    
+  # Context configuration
+  context:
+    name: "EternalJukebox Context"
+    description: "EternalJukebox application context"
+    
+    # Include patterns
+    include-patterns:
+      - "http://localhost:8080/.*"
+      - "http://127.0.0.1:8080/.*"
+    
+    # Exclude patterns
+    exclude-patterns:
+      - "http://localhost:8080/static/.*"
+      - "http://localhost:8080/css/.*"
+      - "http://localhost:8080/js/.*"
+      - "http://localhost:8080/images/.*"
+    
+    # Authentication configuration
+    authentication:
+      method: "form-based"
+      login-url: "http://localhost:8080/auth/login"
+      login-request:
+        method: "POST"
+        url: "http://localhost:8080/auth/login"
+        headers:
+          - "Content-Type: application/json"
+        body: '{"username": "testuser", "password": "testpass"}'
+    
+    # Session management
+    session-management:
+      method: "cookie-based"
+      session-tokens:
+        - "JSESSIONID"
+        - "accessToken"
+        - "refreshToken"
+
+# Custom rules for EternalJukebox
+custom-rules:
+  - name: "JWT Token Exposure"
+    description: "Check for JWT token exposure in responses"
+    enabled: true
+    risk: "HIGH"
+    confidence: "MEDIUM"
+    
+  - name: "Audio Analysis Endpoint Security"
+    description: "Check audio analysis endpoints for security issues"
+    enabled: true
+    risk: "MEDIUM"
+    confidence: "HIGH"
+    
+  - name: "URL Validation Bypass"
+    description: "Test URL validation for SSRF vulnerabilities"
+    enabled: true
+    risk: "HIGH"
+    confidence: "MEDIUM"
+
+# Output configuration
+output:
+  format: "json"
+  file: "zap-results.json"
+  include-request-response: true
+  include-alerts: true

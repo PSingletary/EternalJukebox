@@ -14,6 +14,8 @@
   },
   "analysisServiceComment": "Audio analysis service configuration",
   "analysisServiceUrl": "http://localhost:5000",
+  "securityComment": "Security configuration",
+  "jwtSecret": "<JWT_SECRET>",
   "audioSourceComment": "If not provided, local audio should work",
   "audioSourceType": "YOUTUBE",
   "audioSourceOptions": {

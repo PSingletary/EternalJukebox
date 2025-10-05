@@ -10,6 +10,7 @@ import kotlinx.coroutines.withContext
 import org.abimon.eternalJukebox.*
 import org.abimon.eternalJukebox.objects.*
 import org.abimon.visi.io.ByteArrayDataSource
+import org.abimon.eternalJukebox.security.SecurityConfig
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -87,34 +88,61 @@ object AnalysisAPI : IAPI {
     }
     
     /**
-     * New endpoint for analyzing audio from URL
+     * New endpoint for analyzing audio from URL with security validation
      */
     private suspend fun analyseUrl(context: RoutingContext) {
-        val body = context.bodyAsJson
-        val url = body.getString("url")
-        
-        if (url.isNullOrBlank()) {
-            return context.response().setStatusCode(400).end(
+        try {
+            val body = context.bodyAsJson
+            val rawUrl = body.getString("url")
+            
+            // Validate input
+            if (rawUrl.isNullOrBlank()) {
+                return context.response().setStatusCode(400).end(
+                    jsonObjectOf(
+                        "error" to "URL is required",
+                        "code" to "MISSING_URL",
+                        "client_uid" to context.clientInfo.userUID
+                    )
+                )
+            }
+            
+            // Sanitize and validate URL
+            val sanitizedUrl = SecurityConfig.sanitizeInput(rawUrl)
+            if (!SecurityConfig.isValidUrl(sanitizedUrl)) {
+                return context.response().setStatusCode(400).end(
+                    jsonObjectOf(
+                        "error" to "Invalid or unsafe URL provided",
+                        "code" to "INVALID_URL",
+                        "client_uid" to context.clientInfo.userUID
+                    )
+                )
+            }
+            
+            logger.trace("[{}] Analyzing URL: {}", context.clientInfo.userUID, sanitizedUrl)
+            
+            // Get track info from URL
+            val trackInfo = EternalJukebox.analyser.getInfoFromUrl(sanitizedUrl, context.clientInfo)
+                ?: return context.response().setStatusCode(400).end(
+                    jsonObjectOf(
+                        "error" to "Could not extract track information from URL",
+                        "code" to "TRACK_INFO_EXTRACTION_FAILED",
+                        "client_uid" to context.clientInfo.userUID
+                    )
+                )
+            
+            // Generate analysis using Python service
+            return generateAnalysisForTrack(trackInfo, context)
+            
+        } catch (e: Exception) {
+            logger.error("[{}] Error in analyseUrl: ${e.message}", context.clientInfo.userUID, e)
+            context.response().setStatusCode(500).end(
                 jsonObjectOf(
-                    "error" to "URL is required",
+                    "error" to "Internal server error",
+                    "code" to "ANALYSIS_ERROR",
                     "client_uid" to context.clientInfo.userUID
                 )
             )
         }
-        
-        logger.trace("[{}] Analyzing URL: {}", context.clientInfo.userUID, url)
-        
-        // Get track info from URL
-        val trackInfo = EternalJukebox.analyser.getInfoFromUrl(url, context.clientInfo)
-            ?: return context.response().setStatusCode(400).end(
-                jsonObjectOf(
-                    "error" to "Could not extract track information from URL",
-                    "client_uid" to context.clientInfo.userUID
-                )
-            )
-        
-        // Generate analysis using Python service
-        return generateAnalysisForTrack(trackInfo, context)
     }
 
     private suspend fun upload(context: RoutingContext) {

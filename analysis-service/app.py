@@ -7,8 +7,11 @@ import os
 import logging
 import tempfile
 import requests
+import re
+import secrets
 from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
+from flask_talisman import Talisman
 from werkzeug.utils import secure_filename
 from analyzer import AudioAnalyzer
 import yt_dlp
@@ -19,7 +22,21 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for cross-origin requests
+
+# Security configuration
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB limit
+
+# Secure CORS configuration
+CORS(app, origins=[
+    'http://localhost:8080',
+    'https://localhost:8080',
+    'http://127.0.0.1:8080',
+    'https://127.0.0.1:8080'
+])
+
+# Add security headers
+Talisman(app, force_https=False)  # Set to True in production
 
 # Configuration
 UPLOAD_FOLDER = '/tmp/audio_uploads'
@@ -36,6 +53,52 @@ def allowed_file(filename):
     """Check if file extension is allowed"""
     return '.' in filename and \
            filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def validate_url(url: str) -> bool:
+    """Validate URL to prevent SSRF attacks"""
+    try:
+        import urllib.parse
+        parsed = urllib.parse.urlparse(url)
+        
+        # Only allow HTTPS and HTTP schemes
+        if parsed.scheme not in ['https', 'http']:
+            return False
+            
+        # Define allowed hosts
+        allowed_hosts = {
+            'youtube.com', 'www.youtube.com', 'youtu.be',
+            'soundcloud.com', 'www.soundcloud.com',
+            'bandcamp.com', 'www.bandcamp.com',
+            'vimeo.com', 'www.vimeo.com',
+            'localhost', '127.0.0.1'
+        }
+        
+        # Check if host is allowed
+        host = parsed.hostname.lower() if parsed.hostname else ''
+        return host in allowed_hosts
+        
+    except Exception as e:
+        logger.warning(f"URL validation failed: {e}")
+        return False
+
+def sanitize_url(url: str) -> str:
+    """Sanitize URL to prevent injection attacks"""
+    # Remove potentially dangerous characters
+    sanitized = re.sub(r'[^a-zA-Z0-9:/?=&._-]', '', url)
+    # Remove whitespace
+    sanitized = re.sub(r'\s+', '', sanitized)
+    return sanitized.strip()
+
+def sanitize_input(input_str: str) -> str:
+    """Sanitize user input to prevent XSS and injection attacks"""
+    if not input_str:
+        return ""
+    
+    # Remove HTML/XML characters
+    sanitized = re.sub(r'[<>"\'&]', '', input_str)
+    # Remove control characters
+    sanitized = re.sub(r'[\x00-\x1F\x7F]', '', sanitized)
+    return sanitized.strip()
 
 def download_audio_from_url(url: str) -> str:
     """

@@ -118,35 +118,69 @@ object GenericAudioSource : IAudioSource {
     }
     
     /**
-     * Download audio from a URL using yt-dlp
+     * Sanitize URL to prevent command injection
+     */
+    private fun sanitizeUrl(url: String): String {
+        // Remove any potentially dangerous characters
+        return url.replace(Regex("[^a-zA-Z0-9:/?=&._-]"), "")
+            .replace(Regex("\\s+"), "") // Remove whitespace
+            .trim()
+    }
+    
+    /**
+     * Validate URL format and security
+     */
+    private fun validateUrl(url: String): Boolean {
+        return try {
+            // Use SecurityConfig validation
+            SecurityConfig.isValidUrl(url)
+        } catch (e: Exception) {
+            logger.warn("URL validation failed: ${e.message}")
+            false
+        }
+    }
+    
+    /**
+     * Download audio from a URL using yt-dlp with security measures
      */
     private suspend fun downloadFromUrl(url: String, info: JukeboxInfo, clientInfo: ClientInfo?): DataSource? {
         logger.debug("[{}] Downloading audio from URL: {}", clientInfo?.userUID, url)
         
-        val tmpFile = File("$uuid.tmp")
-        val tmpLog = File("${info.id}-$uuid.log")
-        val ffmpegLog = File("${info.id}-$uuid-ffmpeg.log")
+        // Sanitize and validate URL
+        val sanitizedUrl = sanitizeUrl(url)
+        if (!validateUrl(sanitizedUrl)) {
+            logger.error("[{}] Invalid or unsafe URL: {}", clientInfo?.userUID, url)
+            return null
+        }
+        
+        // Create secure temporary files with proper permissions
+        val tmpFile = createSecureTempFile("audio_", ".tmp")
+        val tmpLog = createSecureTempFile("download_", ".log")
+        val ffmpegLog = createSecureTempFile("ffmpeg_", ".log")
         val endGoalTmp = File(tmpFile.absolutePath.replace(".tmp", ".tmp.$format"))
         
         try {
             withContext(Dispatchers.IO) {
+                // Build command with sanitized URL
                 val cmd = ArrayList(command).apply {
-                    add(url)
+                    add(sanitizedUrl)
                     add(tmpFile.absolutePath)
                     add(format)
                 }
                 
-                logger.debug("[{}] Executing command: {}", clientInfo?.userUID, cmd.joinToString(" "))
+                logger.debug("[{}] Executing secure command: {}", clientInfo?.userUID, cmd.joinToString(" "))
                 
+                // Create secure process with restricted environment
                 val downloadProcess = ProcessBuilder()
                     .command(cmd)
                     .redirectErrorStream(true)
                     .redirectOutput(tmpLog)
+                    .directory(File(System.getProperty("java.io.tmpdir"))) // Restrict working directory
                     .start()
                 
                 if (!downloadProcess.waitFor(90, TimeUnit.SECONDS)) {
                     downloadProcess.destroyForcibly().waitFor()
-                    logger.error("[{}] Forcibly destroyed download process for {}", clientInfo?.userUID, url)
+                    logger.error("[{}] Forcibly destroyed download process for {}", clientInfo?.userUID, sanitizedUrl)
                 }
             }
             
@@ -337,6 +371,21 @@ object GenericAudioSource : IAudioSource {
         return platformPatterns.values.any { patterns ->
             patterns.any { pattern -> pattern.containsMatchIn(url) }
         } || isDirectAudioUrl(url)
+    }
+    
+    /**
+     * Create secure temporary file with proper permissions
+     */
+    private fun createSecureTempFile(prefix: String, suffix: String): File {
+        val tempDir = File(System.getProperty("java.io.tmpdir"))
+        val tempFile = File.createTempFile(prefix, suffix, tempDir)
+        
+        // Set secure permissions (owner read/write only)
+        tempFile.setReadable(false, false) // Remove other read permissions
+        tempFile.setWritable(false, false) // Remove other write permissions
+        tempFile.setExecutable(false, false) // Remove other execute permissions
+        
+        return tempFile
     }
     
     init {

@@ -15,6 +15,9 @@ storageOptions:
 # Audio analysis service configuration
 analysisServiceUrl: http://localhost:5000
 
+# Security configuration
+jwtSecret: ${JWT_SECRET:-eternaljukebox-default-secret-key-change-in-production}
+
 # If not provided, local audio should work
 audioSourceType: YOUTUBE
 audioSourceOptions:

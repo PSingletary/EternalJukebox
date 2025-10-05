@@ -22,6 +22,9 @@ storageOptions:
 # Audio analysis service configuration
 analysisServiceUrl: ${ANALYSIS_SERVICE_URL}
 
+# Security configuration
+jwtSecret: ${JWT_SECRET}
+
 # If not provided, local audio should work
 audioSourceType: YOUTUBE
 audioSourceOptions:

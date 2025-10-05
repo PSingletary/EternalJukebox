@@ -1,0 +1,206 @@
+# EternalJukebox Issue Routing Metrics Dashboard
+
+This GitHub Action collects and reports metrics on issue routing accuracy and response times.
+
+name: Issue Routing Metrics
+
+on:
+  schedule:
+    # Run daily at 9 AM UTC
+    - cron: '0 9 * * *'
+  workflow_dispatch:
+    # Allow manual trigger
+
+jobs:
+  collect-metrics:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect Issue Metrics
+        id: metrics
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'all',
+              per_page: 100,
+              since: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() // Last 30 days
+            });
+
+            const metrics = {
+              total_issues: issues.length,
+              security_issues: 0,
+              bug_reports: 0,
+              feature_requests: 0,
+              documentation_issues: 0,
+              general_questions: 0,
+              misrouted_issues: 0,
+              avg_response_time: 0,
+              resolved_issues: 0,
+              open_issues: 0
+            };
+
+            let total_response_time = 0;
+            let response_count = 0;
+
+            for (const issue of issues) {
+              // Count by labels
+              const labels = issue.labels.map(l => l.name);
+              
+              if (labels.includes('security')) metrics.security_issues++;
+              if (labels.includes('bug')) metrics.bug_reports++;
+              if (labels.includes('enhancement')) metrics.feature_requests++;
+              if (labels.includes('documentation')) metrics.documentation_issues++;
+              if (labels.includes('question')) metrics.general_questions++;
+              
+              // Check for misrouting
+              if (labels.includes('needs-private-reporting')) metrics.misrouted_issues++;
+              
+              // Count resolved vs open
+              if (issue.state === 'closed') metrics.resolved_issues++;
+              else metrics.open_issues++;
+              
+              // Calculate response time
+              if (issue.comments > 0) {
+                const { data: comments } = await github.rest.issues.listComments({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issue.number
+                });
+                
+                if (comments.length > 0) {
+                  const first_comment = comments[0];
+                  const response_time = new Date(first_comment.created_at) - new Date(issue.created_at);
+                  total_response_time += response_time;
+                  response_count++;
+                }
+              }
+            }
+
+            metrics.avg_response_time = response_count > 0 ? total_response_time / response_count : 0;
+
+            // Convert to hours
+            metrics.avg_response_time_hours = Math.round(metrics.avg_response_time / (1000 * 60 * 60) * 100) / 100;
+
+            console.log('Metrics collected:', metrics);
+            
+            return metrics;
+
+      - name: Generate Metrics Report
+        id: report
+        run: |
+          METRICS='${{ toJson(steps.metrics.outputs.result) }}'
+          
+          cat << EOF > metrics-report.md
+          # EternalJukebox Issue Routing Metrics Report
+          
+          **Report Date:** $(date)
+          **Period:** Last 30 days
+          
+          ## Issue Distribution
+          
+          | Category | Count | Percentage |
+          |----------|-------|------------|
+          | Total Issues | ${{ fromJson(steps.metrics.outputs.result).total_issues }} | 100% |
+          | Security Issues | ${{ fromJson(steps.metrics.outputs.result).security_issues }} | ${{ fromJson(steps.metrics.outputs.result).security_issues * 100 / fromJson(steps.metrics.outputs.result).total_issues }}% |
+          | Bug Reports | ${{ fromJson(steps.metrics.outputs.result).bug_reports }} | ${{ fromJson(steps.metrics.outputs.result).bug_reports * 100 / fromJson(steps.metrics.outputs.result).total_issues }}% |
+          | Feature Requests | ${{ fromJson(steps.metrics.outputs.result).feature_requests }} | ${{ fromJson(steps.metrics.outputs.result).feature_requests * 100 / fromJson(steps.metrics.outputs.result).total_issues }}% |
+          | Documentation | ${{ fromJson(steps.metrics.outputs.result).documentation_issues }} | ${{ fromJson(steps.metrics.outputs.result).documentation_issues * 100 / fromJson(steps.metrics.outputs.result).total_issues }}% |
+          | General Questions | ${{ fromJson(steps.metrics.outputs.result).general_questions }} | ${{ fromJson(steps.metrics.outputs.result).general_questions * 100 / fromJson(steps.metrics.outputs.result).total_issues }}% |
+          
+          ## Routing Accuracy
+          
+          | Metric | Value |
+          |--------|-------|
+          | Misrouted Issues | ${{ fromJson(steps.metrics.outputs.result).misrouted_issues }} |
+          | Routing Accuracy | ${{ (fromJson(steps.metrics.outputs.result).total_issues - fromJson(steps.metrics.outputs.result).misrouted_issues) * 100 / fromJson(steps.metrics.outputs.result).total_issues }}% |
+          
+          ## Response Times
+          
+          | Metric | Value |
+          |--------|-------|
+          | Average Response Time | ${{ fromJson(steps.metrics.outputs.result).avg_response_time_hours }} hours |
+          | Issues with Responses | ${{ fromJson(steps.metrics.outputs.result).response_count }} |
+          
+          ## Issue Status
+          
+          | Status | Count | Percentage |
+          |--------|-------|------------|
+          | Resolved | ${{ fromJson(steps.metrics.outputs.result).resolved_issues }} | ${{ fromJson(steps.metrics.outputs.result).resolved_issues * 100 / fromJson(steps.metrics.outputs.result).total_issues }}% |
+          | Open | ${{ fromJson(steps.metrics.outputs.result).open_issues }} | ${{ fromJson(steps.metrics.outputs.result).open_issues * 100 / fromJson(steps.metrics.outputs.result).total_issues }}% |
+          
+          ## Recommendations
+          
+          EOF
+          
+          # Add recommendations based on metrics
+          if [ "${{ fromJson(steps.metrics.outputs.result).misrouted_issues }}" -gt 0 ]; then
+            echo "- **Routing Issues**: ${{ fromJson(steps.metrics.outputs.result).misrouted_issues }} issues were misrouted. Review routing rules." >> metrics-report.md
+          fi
+          
+          if [ "${{ fromJson(steps.metrics.outputs.result).avg_response_time_hours }}" -gt 24 ]; then
+            echo "- **Response Time**: Average response time is ${{ fromJson(steps.metrics.outputs.result).avg_response_time_hours }} hours. Consider improving response times." >> metrics-report.md
+          fi
+          
+          if [ "${{ fromJson(steps.metrics.outputs.result).open_issues }}" -gt "${{ fromJson(steps.metrics.outputs.result).resolved_issues }}" ]; then
+            echo "- **Backlog**: More open issues than resolved. Consider increasing team capacity." >> metrics-report.md
+          fi
+
+      - name: Create Metrics Issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const report = fs.readFileSync('metrics-report.md', 'utf8');
+            
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `📊 Issue Routing Metrics Report - ${new Date().toISOString().split('T')[0]}`,
+              body: report,
+              labels: ['metrics', 'routing', 'report']
+            });
+
+      - name: Update Metrics Dashboard
+        uses: actions/github-script@v7
+        with:
+          script: |
+            // Update a metrics dashboard issue if it exists
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: 'metrics-dashboard',
+              state: 'open'
+            });
+            
+            if (issues.length > 0) {
+              const dashboard = issues[0];
+              const fs = require('fs');
+              const report = fs.readFileSync('metrics-report.md', 'utf8');
+              
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: dashboard.number,
+                body: report
+              });
+            } else {
+              // Create new dashboard
+              const fs = require('fs');
+              const report = fs.readFileSync('metrics-report.md', 'utf8');
+              
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: '📊 Issue Routing Metrics Dashboard',
+                body: report,
+                labels: ['metrics-dashboard', 'routing', 'dashboard']
+              });
+            }

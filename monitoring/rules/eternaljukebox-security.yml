@@ -1,0 +1,402 @@
+# EternalJukebox Security Monitoring Rules
+# These rules define security-specific alerts and monitoring
+
+groups:
+  # Authentication and Authorization Security
+  - name: eternaljukebox.security.auth
+    rules:
+      # Failed authentication attempts
+      - alert: EternalJukeboxFailedAuthAttempts
+        expr: rate(eternaljukebox_auth_failed_attempts_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: authentication
+        annotations:
+          summary: "High rate of failed authentication attempts"
+          description: "Failed authentication attempts rate is above 0.1 per second for more than 2 minutes."
+
+      # Brute force attack detection
+      - alert: EternalJukeboxBruteForceAttack
+        expr: rate(eternaljukebox_auth_failed_attempts_total[5m]) > 1
+        for: 1m
+        labels:
+          severity: critical
+          category: security
+          service: authentication
+        annotations:
+          summary: "Potential brute force attack detected"
+          description: "Failed authentication attempts rate is above 1 per second for more than 1 minute."
+
+      # JWT token validation failures
+      - alert: EternalJukeboxJWTValidationFailures
+        expr: rate(eternaljukebox_jwt_validation_failures_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: authentication
+        annotations:
+          summary: "High rate of JWT validation failures"
+          description: "JWT token validation failures rate is above 0.05 per second for more than 2 minutes."
+
+      # Suspicious token usage patterns
+      - alert: EternalJukeboxSuspiciousTokenUsage
+        expr: rate(eternaljukebox_jwt_suspicious_usage_total[5m]) > 0.02
+        for: 1m
+        labels:
+          severity: critical
+          category: security
+          service: authentication
+        annotations:
+          summary: "Suspicious JWT token usage detected"
+          description: "Suspicious JWT token usage rate is above 0.02 per second for more than 1 minute."
+
+  # Input Validation and Injection Security
+  - name: eternaljukebox.security.injection
+    rules:
+      # SQL injection attempts
+      - alert: EternalJukeboxSQLInjectionAttempts
+        expr: rate(eternaljukebox_security_sql_injection_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          service: input-validation
+        annotations:
+          summary: "SQL injection attempt detected"
+          description: "SQL injection attempt detected in the last 5 minutes."
+
+      # XSS attack attempts
+      - alert: EternalJukeboxXSSAttempts
+        expr: rate(eternaljukebox_security_xss_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          service: input-validation
+        annotations:
+          summary: "XSS attack attempt detected"
+          description: "Cross-site scripting (XSS) attack attempt detected in the last 5 minutes."
+
+      # SSRF attack attempts
+      - alert: EternalJukeboxSSRFAttempts
+        expr: rate(eternaljukebox_security_ssrf_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          service: input-validation
+        annotations:
+          summary: "SSRF attack attempt detected"
+          description: "Server-side request forgery (SSRF) attack attempt detected in the last 5 minutes."
+
+      # Path traversal attempts
+      - alert: EternalJukeboxPathTraversalAttempts
+        expr: rate(eternaljukebox_security_path_traversal_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          service: input-validation
+        annotations:
+          summary: "Path traversal attempt detected"
+          description: "Path traversal attack attempt detected in the last 5 minutes."
+
+      # Command injection attempts
+      - alert: EternalJukeboxCommandInjectionAttempts
+        expr: rate(eternaljukebox_security_command_injection_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          service: input-validation
+        annotations:
+          summary: "Command injection attempt detected"
+          description: "Command injection attack attempt detected in the last 5 minutes."
+
+  # Rate Limiting and DoS Protection
+  - name: eternaljukebox.security.rate-limiting
+    rules:
+      # Rate limit exceeded
+      - alert: EternalJukeboxRateLimitExceeded
+        expr: rate(eternaljukebox_rate_limit_exceeded_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: rate-limiting
+        annotations:
+          summary: "High rate of rate limit violations"
+          description: "Rate limit violations rate is above 0.1 per second for more than 2 minutes."
+
+      # Potential DoS attack
+      - alert: EternalJukeboxPotentialDoSAttack
+        expr: rate(eternaljukebox_rate_limit_exceeded_total[5m]) > 1
+        for: 1m
+        labels:
+          severity: critical
+          category: security
+          service: rate-limiting
+        annotations:
+          summary: "Potential DoS attack detected"
+          description: "Rate limit violations rate is above 1 per second for more than 1 minute."
+
+      # Unusual request patterns
+      - alert: EternalJukeboxUnusualRequestPatterns
+        expr: rate(eternaljukebox_unusual_request_patterns_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: rate-limiting
+        annotations:
+          summary: "Unusual request patterns detected"
+          description: "Unusual request patterns rate is above 0.05 per second for more than 2 minutes."
+
+  # File and Data Security
+  - name: eternaljukebox.security.files
+    rules:
+      # Suspicious file uploads
+      - alert: EternalJukeboxSuspiciousFileUploads
+        expr: rate(eternaljukebox_suspicious_file_uploads_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          service: file-security
+        annotations:
+          summary: "Suspicious file upload detected"
+          description: "Suspicious file upload detected in the last 5 minutes."
+
+      # Large file uploads
+      - alert: EternalJukeboxLargeFileUploads
+        expr: rate(eternaljukebox_large_file_uploads_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: file-security
+        annotations:
+          summary: "High rate of large file uploads"
+          description: "Large file uploads rate is above 0.1 per second for more than 2 minutes."
+
+      # File type validation failures
+      - alert: EternalJukeboxFileTypeValidationFailures
+        expr: rate(eternaljukebox_file_type_validation_failures_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: file-security
+        annotations:
+          summary: "High rate of file type validation failures"
+          description: "File type validation failures rate is above 0.05 per second for more than 2 minutes."
+
+  # Network Security
+  - name: eternaljukebox.security.network
+    rules:
+      # Suspicious IP addresses
+      - alert: EternalJukeboxSuspiciousIPs
+        expr: rate(eternaljukebox_suspicious_ip_requests_total[5m]) > 0.1
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: network-security
+        annotations:
+          summary: "Requests from suspicious IP addresses"
+          description: "Requests from suspicious IP addresses rate is above 0.1 per second for more than 2 minutes."
+
+      # Geographic anomalies
+      - alert: EternalJukeboxGeographicAnomalies
+        expr: rate(eternaljukebox_geographic_anomalies_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+          category: security
+          service: network-security
+        annotations:
+          summary: "Geographic anomalies detected"
+          description: "Geographic anomalies rate is above 0.05 per second for more than 5 minutes."
+
+      # Unusual user agents
+      - alert: EternalJukeboxUnusualUserAgents
+        expr: rate(eternaljukebox_unusual_user_agents_total[5m]) > 0.02
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: network-security
+        annotations:
+          summary: "Unusual user agents detected"
+          description: "Unusual user agents rate is above 0.02 per second for more than 2 minutes."
+
+  # Application Security
+  - name: eternaljukebox.security.application
+    rules:
+      # Security header violations
+      - alert: EternalJukeboxSecurityHeaderViolations
+        expr: rate(eternaljukebox_security_header_violations_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: application-security
+        annotations:
+          summary: "Security header violations detected"
+          description: "Security header violations rate is above 0.01 per second for more than 2 minutes."
+
+      # CORS violations
+      - alert: EternalJukeboxCORSViolations
+        expr: rate(eternaljukebox_cors_violations_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: application-security
+        annotations:
+          summary: "CORS violations detected"
+          description: "CORS violations rate is above 0.01 per second for more than 2 minutes."
+
+      # CSRF token violations
+      - alert: EternalJukeboxCSRFViolations
+        expr: rate(eternaljukebox_csrf_violations_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: application-security
+        annotations:
+          summary: "CSRF token violations detected"
+          description: "CSRF token violations rate is above 0.01 per second for more than 2 minutes."
+
+      # Session hijacking attempts
+      - alert: EternalJukeboxSessionHijackingAttempts
+        expr: rate(eternaljukebox_session_hijacking_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          service: application-security
+        annotations:
+          summary: "Session hijacking attempt detected"
+          description: "Session hijacking attempt detected in the last 5 minutes."
+
+  # Data Security and Privacy
+  - name: eternaljukebox.security.data
+    rules:
+      # Data exfiltration attempts
+      - alert: EternalJukeboxDataExfiltrationAttempts
+        expr: rate(eternaljukebox_data_exfiltration_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          service: data-security
+        annotations:
+          summary: "Data exfiltration attempt detected"
+          description: "Data exfiltration attempt detected in the last 5 minutes."
+
+      # PII access violations
+      - alert: EternalJukeboxPIIAccessViolations
+        expr: rate(eternaljukebox_pii_access_violations_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          category: security
+          service: data-security
+        annotations:
+          summary: "PII access violations detected"
+          description: "PII access violations rate is above 0.01 per second for more than 2 minutes."
+
+      # Unauthorized data access
+      - alert: EternalJukeboxUnauthorizedDataAccess
+        expr: rate(eternaljukebox_unauthorized_data_access_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          category: security
+          service: data-security
+        annotations:
+          summary: "Unauthorized data access detected"
+          description: "Unauthorized data access rate is above 0.01 per second for more than 2 minutes."
+
+  # System Security
+  - name: eternaljukebox.security.system
+    rules:
+      # Privilege escalation attempts
+      - alert: EternalJukeboxPrivilegeEscalationAttempts
+        expr: rate(eternaljukebox_privilege_escalation_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          service: system-security
+        annotations:
+          summary: "Privilege escalation attempt detected"
+          description: "Privilege escalation attempt detected in the last 5 minutes."
+
+      # System resource abuse
+      - alert: EternalJukeboxSystemResourceAbuse
+        expr: rate(eternaljukebox_system_resource_abuse_total[5m]) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: system-security
+        annotations:
+          summary: "System resource abuse detected"
+          description: "System resource abuse rate is above 0.05 per second for more than 2 minutes."
+
+      # Container escape attempts
+      - alert: EternalJukeboxContainerEscapeAttempts
+        expr: rate(eternaljukebox_container_escape_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+          category: security
+          service: system-security
+        annotations:
+          summary: "Container escape attempt detected"
+          description: "Container escape attempt detected in the last 5 minutes."
+
+  # Compliance and Audit
+  - name: eternaljukebox.security.compliance
+    rules:
+      # Audit log failures
+      - alert: EternalJukeboxAuditLogFailures
+        expr: rate(eternaljukebox_audit_log_failures_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: critical
+          category: security
+          service: compliance
+        annotations:
+          summary: "Audit log failures detected"
+          description: "Audit log failures rate is above 0.01 per second for more than 2 minutes."
+
+      # Compliance violations
+      - alert: EternalJukeboxComplianceViolations
+        expr: rate(eternaljukebox_compliance_violations_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: compliance
+        annotations:
+          summary: "Compliance violations detected"
+          description: "Compliance violations rate is above 0.01 per second for more than 2 minutes."
+
+      # Security policy violations
+      - alert: EternalJukeboxSecurityPolicyViolations
+        expr: rate(eternaljukebox_security_policy_violations_total[5m]) > 0.01
+        for: 2m
+        labels:
+          severity: warning
+          category: security
+          service: compliance
+        annotations:
+          summary: "Security policy violations detected"
+          description: "Security policy violations rate is above 0.01 per second for more than 2 minutes."

@@ -1,0 +1,84 @@
+name: Security Question
+description: Ask a security-related question or discuss security best practices
+title: "[SECURITY] "
+labels: ["security", "question", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for your security question! This template is for general security discussions, configuration help, and best practices.
+        
+        **Important**: If you've discovered a security vulnerability, DO NOT use this template. Instead, report it privately to security@eternaljukebox.com or use GitHub Security Advisories.
+
+  - type: dropdown
+    id: category
+    attributes:
+      label: Security Category
+      description: What type of security question is this?
+      options:
+        - Configuration Help
+        - Best Practices
+        - Security Feature Request
+        - Documentation Question
+        - Compliance Question
+        - Incident Response
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: Security Question
+      description: What is your security-related question?
+      placeholder: Please describe your security question or concern...
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Provide context about your environment or situation
+      placeholder: |
+        - What version of EternalJukebox are you using?
+        - What environment are you running in?
+        - What specific security concern or goal do you have?
+
+  - type: textarea
+    id: current_setup
+    attributes:
+      label: Current Security Setup
+      description: Describe your current security configuration (if applicable)
+      placeholder: |
+        - Authentication method used
+        - Network configuration
+        - Any existing security measures
+        - Compliance requirements
+
+  - type: textarea
+    id: research
+    attributes:
+      label: Research Done
+      description: What have you already tried or researched?
+      placeholder: |
+        - Documentation consulted
+        - Previous attempts
+        - Related issues or discussions
+        - External resources reviewed
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Information
+      description: Any other relevant information
+      placeholder: Screenshots, logs, configuration files, or other details that might help...
+
+  - type: checkboxes
+    id: terms
+    attributes:
+      label: Code of Conduct
+      description: By submitting this issue, you agree to follow our Code of Conduct
+      options:
+        - label: I agree to follow this project's Code of Conduct
+          required: true

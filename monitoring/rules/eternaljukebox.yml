@@ -1,0 +1,231 @@
+# EternalJukebox Alerting Rules
+# These rules define when alerts should be triggered based on metrics
+
+groups:
+  # Service availability alerts
+  - name: eternaljukebox.service.availability
+    rules:
+      # Main service is down
+      - alert: EternalJukeboxMainDown
+        expr: up{job="eternaljukebox-main"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: eternaljukebox-main
+        annotations:
+          summary: "EternalJukebox main service is down"
+          description: "The EternalJukebox main service has been down for more than 1 minute."
+
+      # Analysis service is down
+      - alert: EternalJukeboxAnalysisDown
+        expr: up{job="eternaljukebox-analysis"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: eternaljukebox-analysis
+        annotations:
+          summary: "EternalJukebox analysis service is down"
+          description: "The EternalJukebox analysis service has been down for more than 1 minute."
+
+      # Redis is down (if enabled)
+      - alert: RedisDown
+        expr: up{job="redis"} == 0
+        for: 2m
+        labels:
+          severity: warning
+          service: redis
+        annotations:
+          summary: "Redis cache is down"
+          description: "The Redis cache service has been down for more than 2 minutes."
+
+  # Performance alerts
+  - name: eternaljukebox.performance
+    rules:
+      # High response time for main service
+      - alert: EternalJukeboxMainHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="eternaljukebox-main"}[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+          service: eternaljukebox-main
+        annotations:
+          summary: "EternalJukebox main service high response time"
+          description: "The 95th percentile response time for the main service is above 2 seconds."
+
+      # High response time for analysis service
+      - alert: EternalJukeboxAnalysisHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="eternaljukebox-analysis"}[5m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: eternaljukebox-analysis
+        annotations:
+          summary: "EternalJukebox analysis service high response time"
+          description: "The 95th percentile response time for the analysis service is above 10 seconds."
+
+      # High error rate for main service
+      - alert: EternalJukeboxMainHighErrorRate
+        expr: rate(http_requests_total{job="eternaljukebox-main",status=~"5.."}[5m]) / rate(http_requests_total{job="eternaljukebox-main"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: eternaljukebox-main
+        annotations:
+          summary: "EternalJukebox main service high error rate"
+          description: "The error rate for the main service is above 5%."
+
+      # High error rate for analysis service
+      - alert: EternalJukeboxAnalysisHighErrorRate
+        expr: rate(http_requests_total{job="eternaljukebox-analysis",status=~"5.."}[5m]) / rate(http_requests_total{job="eternaljukebox-analysis"}[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: critical
+          service: eternaljukebox-analysis
+        annotations:
+          summary: "EternalJukebox analysis service high error rate"
+          description: "The error rate for the analysis service is above 10%."
+
+  # Resource usage alerts
+  - name: eternaljukebox.resources
+    rules:
+      # High CPU usage
+      - alert: EternalJukeboxHighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 10 minutes."
+
+      # High memory usage
+      - alert: EternalJukeboxHighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 85% for more than 10 minutes."
+
+      # Low disk space
+      - alert: EternalJukeboxLowDiskSpace
+        expr: (1 - (node_filesystem_avail_bytes / node_filesystem_size_bytes)) * 100 > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space usage is above 90% for more than 5 minutes."
+
+      # High disk I/O
+      - alert: EternalJukeboxHighDiskIO
+        expr: rate(node_disk_io_time_seconds_total[5m]) > 0.8
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High disk I/O detected"
+          description: "Disk I/O usage is above 80% for more than 10 minutes."
+
+  # Container-specific alerts
+  - name: eternaljukebox.containers
+    rules:
+      # Container restarting frequently
+      - alert: EternalJukeboxContainerRestarting
+        expr: rate(container_restart_count[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container restarting frequently"
+          description: "Container {{ $labels.name }} is restarting more than 0.1 times per minute."
+
+      # Container OOM killed
+      - alert: EternalJukeboxContainerOOMKilled
+        expr: increase(container_oom_kills_total[1h]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Container OOM killed"
+          description: "Container {{ $labels.name }} was killed due to out of memory."
+
+      # Container high memory usage
+      - alert: EternalJukeboxContainerHighMemoryUsage
+        expr: (container_memory_usage_bytes / container_spec_memory_limit_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container high memory usage"
+          description: "Container {{ $labels.name }} memory usage is above 90%."
+
+  # Network alerts
+  - name: eternaljukebox.network
+    rules:
+      # High network traffic
+      - alert: EternalJukeboxHighNetworkTraffic
+        expr: rate(node_network_receive_bytes_total[5m]) + rate(node_network_transmit_bytes_total[5m]) > 100000000
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High network traffic detected"
+          description: "Network traffic is above 100MB/s for more than 10 minutes."
+
+      # Network errors
+      - alert: EternalJukeboxNetworkErrors
+        expr: rate(node_network_receive_errs_total[5m]) + rate(node_network_transmit_errs_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Network errors detected"
+          description: "Network error rate is above 0.1 errors per second."
+
+  # Application-specific alerts
+  - name: eternaljukebox.application
+    rules:
+      # Analysis queue backlog
+      - alert: EternalJukeboxAnalysisQueueBacklog
+        expr: eternaljukebox_analysis_queue_size > 10
+        for: 5m
+        labels:
+          severity: warning
+          service: eternaljukebox-analysis
+        annotations:
+          summary: "Analysis queue backlog"
+          description: "Analysis queue has more than 10 pending items for more than 5 minutes."
+
+      # Analysis processing time
+      - alert: EternalJukeboxAnalysisProcessingTime
+        expr: eternaljukebox_analysis_processing_time_seconds > 300
+        for: 5m
+        labels:
+          severity: warning
+          service: eternaljukebox-analysis
+        annotations:
+          summary: "Analysis processing time too long"
+          description: "Analysis processing time is above 5 minutes for more than 5 minutes."
+
+      # Database connection issues
+      - alert: EternalJukeboxDatabaseConnectionIssues
+        expr: eternaljukebox_database_connection_errors_total > 5
+        for: 2m
+        labels:
+          severity: critical
+          service: database
+        annotations:
+          summary: "Database connection issues"
+          description: "More than 5 database connection errors in the last 2 minutes."
+
+      # Storage space issues
+      - alert: EternalJukeboxStorageSpaceIssues
+        expr: eternaljukebox_storage_free_space_bytes < 1073741824
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Storage space issues"
+          description: "Available storage space is below 1GB for more than 5 minutes."
