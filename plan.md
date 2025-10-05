@@ -274,18 +274,219 @@ Create GitHub Actions workflows for automated deployment to:
 - `_web/_includes/search-js.html` - Generic URL input
 - `_web/_includes/go-js.html` - Remove Spotify references
 
-### To-dos
+## Implementation Progress Tracking
 
-- [ ] Create Python audio analysis microservice with librosa
-- [ ] Remove Spotify dependencies from Kotlin backend code
-- [ ] Create GenericAnalyser to replace SpotifyAnalyser
-- [ ] Update audio source system to support any yt-dlp URL
-- [ ] Modify AnalysisAPI to integrate with Python service
-- [ ] Update frontend for generic URL input and remove Spotify references
-- [ ] Update Docker configuration for analysis service
-- [ ] Update configuration templates and documentation
-- [ ] Create GitHub Actions workflows for Azure deployment
-- [ ] Create GitHub Actions workflows for AWS deployment
-- [ ] Create GitHub Actions workflows for VPS deployment
-- [ ] Set up automated health checks and monitoring
-- [ ] Create deployment documentation and migration guides
+### Backend Implementation (Todos 1-5)
+- [ ] **Todo 1**: Create Python audio analysis microservice with librosa
+- [ ] **Todo 2**: Remove Spotify dependencies from Kotlin backend code
+- [ ] **Todo 3**: Create GenericAnalyser to replace SpotifyAnalyser
+- [ ] **Todo 4**: Update audio source system to support any yt-dlp URL
+- [ ] **Todo 5**: Modify AnalysisAPI to integrate with Python service
+
+### Frontend & Infrastructure (Todos 6-8)
+- [ ] **Todo 6**: Update frontend for generic URL input and remove Spotify references
+- [ ] **Todo 7**: Update Docker configuration for analysis service
+- [ ] **Todo 8**: Update configuration templates and documentation
+
+### Deployment & Monitoring (Todos 9-13)
+- [ ] **Todo 9**: Create GitHub Actions workflows for Azure deployment
+- [ ] **Todo 10**: Create GitHub Actions workflows for AWS deployment
+- [ ] **Todo 11**: Create GitHub Actions workflows for VPS deployment
+- [ ] **Todo 12**: Set up automated health checks and monitoring
+- [ ] **Todo 13**: Create deployment documentation and migration guides
+
+## Agent Prompts for Context Continuity
+
+### For Todo 1: Python Audio Analysis Service
+```
+You are implementing Todo 1 from the EternalJukebox Spotify removal plan. 
+Context: This is a Kotlin-based EternalJukebox project that creates endless music loops. 
+Goal: Create a Python microservice using librosa to replace Spotify's audio analysis API.
+Requirements:
+- Create analysis-service/ directory with Flask/FastAPI app
+- Extract beats, bars, tatums, sections, segments using librosa
+- Return JSON matching existing SpotifyAudioSection/Beat/etc. format
+- Expose /analyze endpoint for Kotlin backend
+- Include Dockerfile for containerization
+Files to create: analysis-service/requirements.txt, analyzer.py, app.py, Dockerfile
+Next: After completing, update plan.md changelog and move to Todo 2.
+```
+
+### For Todo 2: Remove Spotify Dependencies
+```
+You are implementing Todo 2 from the EternalJukebox Spotify removal plan.
+Context: Remove all Spotify dependencies from the Kotlin backend codebase.
+Goal: Clean removal of Spotify integration while preserving existing functionality.
+Requirements:
+- Delete SpotifyAnalyser.kt and SpotifyError.kt entirely
+- Remove spotifyClient/spotifySecret from JukeboxConfig.kt
+- Update EternalJukebox.kt to remove Spotify initialization
+- Remove Spotify references from config templates
+- Update README.md to remove Spotify setup instructions
+Files to modify: Multiple Kotlin files, config templates, README.md
+Next: After completing, update plan.md changelog and move to Todo 3.
+```
+
+### For Todo 3: Create GenericAnalyser
+```
+You are implementing Todo 3 from the EternalJukebox Spotify removal plan.
+Context: Replace SpotifyAnalyser with a generic analyser that works with any audio source.
+Goal: Create GenericAnalyser.kt that implements IAnalyser interface.
+Requirements:
+- Implement IAnalyser interface (search() and getInfo() methods)
+- Use NewPipeExtractor for YouTube search (already available)
+- Call Python analysis service for audio analysis generation
+- Use video ID as primary identifier, URL hash as fallback
+- Handle metadata extraction from yt-dlp
+Files to create: src/main/kotlin/org/abimon/eternalJukebox/data/analysis/GenericAnalyser.kt
+Next: After completing, update plan.md changelog and move to Todo 4.
+```
+
+### For Todo 4: Update Audio Source System
+```
+You are implementing Todo 4 from the EternalJukebox Spotify removal plan.
+Context: Enhance audio source system to support any yt-dlp compatible URL.
+Goal: Support YouTube, SoundCloud, Bandcamp, Vimeo, and other yt-dlp sources.
+Requirements:
+- Enhance YoutubeAudioSource.kt for broader URL support
+- Create GenericAudioSource.kt for non-YouTube sources
+- Extract video/track IDs from various platforms
+- Generate consistent identifiers across platforms
+- Update ID extraction logic for multi-platform support
+Files to create/modify: GenericAudioSource.kt, YoutubeAudioSource.kt updates
+Next: After completing, update plan.md changelog and move to Todo 5.
+```
+
+### For Todo 5: Update Analysis API
+```
+You are implementing Todo 5 from the EternalJukebox Spotify removal plan.
+Context: Modify AnalysisAPI to integrate with the new Python analysis service.
+Goal: Update API endpoints to work with generic audio sources and Python analysis.
+Requirements:
+- Update /analyse/:id endpoint to call Python analysis service
+- Add /analyse/url endpoint for direct URL input
+- Keep upload functionality for pre-existing analysis
+- Implement caching of generated analysis in storage
+- Handle errors gracefully when analysis service is unavailable
+Files to modify: src/main/kotlin/org/abimon/eternalJukebox/handlers/api/AnalysisAPI.kt
+Next: After completing, update plan.md changelog and move to Todo 6.
+```
+
+### For Todo 6: Update Frontend
+```
+You are implementing Todo 6 from the EternalJukebox Spotify removal plan.
+Context: Update frontend to support generic URL input and remove Spotify references.
+Goal: Modernize UI for any yt-dlp compatible source, remove Spotify-specific elements.
+Requirements:
+- Update search-js.html to replace Spotify URL input with generic URL input
+- Support any yt-dlp compatible URL validation
+- Remove Spotify URL parsing and validation
+- Update go-js.html to remove Spotify error references
+- Update track info display for generic sources
+Files to modify: _web/_includes/search-js.html, _web/_includes/go-js.html
+Next: After completing, update plan.md changelog and move to Todo 7.
+```
+
+### For Todo 7: Docker Configuration
+```
+You are implementing Todo 7 from the EternalJukebox Spotify removal plan.
+Context: Update Docker configuration to include the Python analysis service.
+Goal: Containerize the Python analysis service and integrate with main application.
+Requirements:
+- Update Dockerfile to install librosa dependencies
+- Add analysis service as separate container in docker-compose.yml
+- Set up internal network for Kotlin backend → Python service communication
+- Ensure proper service discovery and health checks
+Files to modify: Dockerfile, docker-compose.yml
+Next: After completing, update plan.md changelog and move to Todo 8.
+```
+
+### For Todo 8: Configuration Updates
+```
+You are implementing Todo 8 from the EternalJukebox Spotify removal plan.
+Context: Update configuration templates and documentation.
+Goal: Remove Spotify configuration requirements and add new service configurations.
+Requirements:
+- Remove Spotify credentials from config_template.yaml/json
+- Remove Spotify references from envvar_config.yaml
+- Add analysisServiceUrl configuration
+- Update README.md with new setup instructions
+- Remove Spotify setup documentation
+Files to modify: config_template.yaml, config_template.json, envvar_config.yaml, README.md
+Next: After completing, update plan.md changelog and move to Todo 9.
+```
+
+### For Todo 9: Azure Deployment
+```
+You are implementing Todo 9 from the EternalJukebox Spotify removal plan.
+Context: Create GitHub Actions workflow for Azure deployment.
+Goal: Enable automated deployment to Azure Container Instances/Apps.
+Requirements:
+- Create .github/workflows/deploy-azure.yml
+- Support Azure Container Instances for simple deployments
+- Support Azure Container Apps for scalable serverless containers
+- Include environment variable configuration
+- Add health checks and monitoring
+Files to create: .github/workflows/deploy-azure.yml
+Next: After completing, update plan.md changelog and move to Todo 10.
+```
+
+### For Todo 10: AWS Deployment
+```
+You are implementing Todo 10 from the EternalJukebox Spotify removal plan.
+Context: Create GitHub Actions workflow for AWS deployment.
+Goal: Enable automated deployment to AWS ECS/App Runner/Elastic Beanstalk.
+Requirements:
+- Create .github/workflows/deploy-aws.yml
+- Support AWS ECS with Fargate for serverless containers
+- Support AWS App Runner for simplified deployment
+- Support AWS Elastic Beanstalk for managed hosting
+- Include proper IAM roles and security configurations
+Files to create: .github/workflows/deploy-aws.yml
+Next: After completing, update plan.md changelog and move to Todo 11.
+```
+
+### For Todo 11: VPS Deployment
+```
+You are implementing Todo 11 from the EternalJukebox Spotify removal plan.
+Context: Create GitHub Actions workflow for VPS deployment.
+Goal: Enable automated deployment to any VPS provider via SSH.
+Requirements:
+- Create .github/workflows/deploy-vps.yml
+- Support generic SSH deployment for any VPS (DigitalOcean, Linode, Vultr, etc.)
+- Include Docker Compose deployment with health checks
+- Implement rolling updates with zero downtime
+- Add deployment verification and rollback capabilities
+Files to create: .github/workflows/deploy-vps.yml
+Next: After completing, update plan.md changelog and move to Todo 12.
+```
+
+### For Todo 12: Health Checks & Monitoring
+```
+You are implementing Todo 12 from the EternalJukebox Spotify removal plan.
+Context: Set up automated health checks and monitoring.
+Goal: Ensure service reliability and provide monitoring capabilities.
+Requirements:
+- Create deployment/health-check.sh script
+- Add health check endpoints for all services
+- Implement monitoring for analysis service performance
+- Add alerting for service failures
+- Create monitoring dashboard configuration
+Files to create: deployment/health-check.sh, monitoring configurations
+Next: After completing, update plan.md changelog and move to Todo 13.
+```
+
+### For Todo 13: Documentation & Migration
+```
+You are implementing Todo 13 from the EternalJukebox Spotify removal plan.
+Context: Create deployment documentation and migration guides.
+Goal: Provide comprehensive documentation for users and developers.
+Requirements:
+- Create deployment documentation for all cloud providers
+- Write migration guide for existing users
+- Document new configuration options
+- Create troubleshooting guides
+- Add examples and best practices
+Files to create: deployment documentation, migration guides, troubleshooting docs
+Next: After completing, update plan.md changelog and mark all todos complete.
+```
