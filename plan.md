@@ -285,7 +285,7 @@ Create GitHub Actions workflows for automated deployment to:
 - [x] **Todo 1**: Create Python audio analysis microservice with librosa ✅ COMPLETED
 - [x] **Todo 2**: Remove Spotify dependencies from Kotlin backend code ✅ COMPLETED
 - [x] **Todo 3**: Create GenericAnalyser to replace SpotifyAnalyser ✅ COMPLETED
-- [ ] **Todo 4**: Update audio source system to support any yt-dlp URL
+- [x] **Todo 4**: Update audio source system to support any yt-dlp URL ✅ COMPLETED
 - [ ] **Todo 5**: Modify AnalysisAPI to integrate with Python service
 
 ### Frontend & Infrastructure (Todos 6-8)
@@ -498,7 +498,7 @@ Next: After completing, update plan.md changelog and mark all todos complete.
 
 ## 🚀 **PROGRESS SUMMARY - 75% Context Used**
 
-### **✅ COMPLETED (3/13 todos)**
+### **✅ COMPLETED (4/13 todos)**
 - **Todo 1**: Python audio analysis microservice with librosa
   - Created complete `analysis-service/` directory
   - Implemented Flask REST API with librosa analysis
@@ -516,6 +516,13 @@ Next: After completing, update plan.md changelog and mark all todos complete.
   - Implemented getInfo() method for metadata extraction from URLs
   - Added Python analysis service integration for audio analysis generation
   - Updated EternalJukebox.kt to use GenericAnalyser instead of SpotifyAnalyser
+- **Todo 4**: Update audio source system to support any yt-dlp URL
+  - Created GenericAudioSource.kt for yt-dlp compatible URLs
+  - Enhanced YoutubeAudioSource.kt with improved URL handling and caching
+  - Added GENERIC audio source type to EnumAudioSystem
+  - Updated ID extraction logic for multi-platform support (YouTube, SoundCloud, Bandcamp, Vimeo, etc.)
+  - Enhanced GenericAnalyser with platform detection and URL parsing
+  - Support for 1800+ platforms via yt-dlp integration
 
 ### **🔧 INFRASTRUCTURE FIXES**
 - Fixed build.gradle KotlinCompile import issues
@@ -526,7 +533,7 @@ Next: After completing, update plan.md changelog and mark all todos complete.
 ### **📊 CURRENT STATUS**
 - **Branch**: `llm` (active development branch)
 - **Pull Request**: #1 created and ready for implementation
-- **Next Todo**: Todo 4 - Update audio source system to support any yt-dlp URL
+- **Next Todo**: Todo 5 - Modify AnalysisAPI to integrate with Python service
 - **Files Ready**: Python analysis service fully implemented
 
 ---

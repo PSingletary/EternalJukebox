@@ -57,6 +57,13 @@ object YoutubeAudioSource : IAudioSource {
     override suspend fun provide(info: JukeboxInfo, clientInfo: ClientInfo?): DataSource? {
         logger.trace("[{}] Attempting to provide audio for {}", clientInfo?.userUID, info.id)
 
+        // Check if we have a cached location first
+        val cachedLocation = provideLocation(info, clientInfo)
+        if (cachedLocation != null) {
+            logger.trace("[{}] Using cached location for {}", clientInfo?.userUID, info.id)
+            return downloadFromUrl(cachedLocation.toString(), info, clientInfo)
+        }
+
         var youTubeUrl: String? = null
         val queryText = "${info.artist} - ${info.title}"
 
@@ -89,15 +96,35 @@ object YoutubeAudioSource : IAudioSource {
             "[{}] Settled on {}", clientInfo?.userUID, youTubeUrl
         )
 
+        return downloadFromUrl(youTubeUrl, info, clientInfo)
+    }
+
+    override suspend fun provideLocation(info: JukeboxInfo, clientInfo: ClientInfo?): URL? {
+        val dbLocation =
+            withContext(Dispatchers.IO) { EternalJukebox.database.provideAudioLocation(info.id, clientInfo) }
+
+        if (dbLocation != null) {
+            logger.trace("[{}] Using cached location for {}", clientInfo?.userUID, info.id)
+            return withContext(Dispatchers.IO) { URL(dbLocation) }
+        }
+        return null
+    }
+
+    /**
+     * Download audio from a URL using yt-dlp
+     */
+    private suspend fun downloadFromUrl(url: String, info: JukeboxInfo, clientInfo: ClientInfo?): DataSource? {
+        logger.debug("[{}] Downloading audio from URL: {}", clientInfo?.userUID, url)
+        
         val tmpFile = File("$uuid.tmp")
         val tmpLog = File("${info.id}-$uuid.log")
-        val ffmpegLog = File("${info.id}-$uuid.log")
+        val ffmpegLog = File("${info.id}-$uuid-ffmpeg.log")
         val endGoalTmp = File(tmpFile.absolutePath.replace(".tmp", ".tmp.$format"))
-
+        
         try {
             withContext(Dispatchers.IO) {
                 val cmd = ArrayList(command).apply {
-                    add(youTubeUrl)
+                    add(url)
                     add(tmpFile.absolutePath)
                     add(format)
                 }
@@ -108,7 +135,7 @@ object YoutubeAudioSource : IAudioSource {
                 if (!downloadProcess.waitFor(90, TimeUnit.SECONDS)) {
                     downloadProcess.destroyForcibly().waitFor()
                     logger.error(
-                        "[{}] Forcibly destroyed the download process for {}", clientInfo?.userUID, youTubeUrl
+                        "[{}] Forcibly destroyed the download process for {}", clientInfo?.userUID, url
                     )
                 }
             }
@@ -165,6 +192,9 @@ object YoutubeAudioSource : IAudioSource {
             }
 
             return EternalJukebox.storage.provide("${info.id}.$format", EnumStorageType.AUDIO, clientInfo)
+        } catch (e: Exception) {
+            logger.error("[{}] Error downloading from URL {}: {}", clientInfo?.userUID, url, e.message)
+            return null
         } finally {
             tmpFile.guaranteeDelete()
             File(tmpFile.absolutePath + ".part").guaranteeDelete()
@@ -190,17 +220,6 @@ object YoutubeAudioSource : IAudioSource {
                 }
             }
         }
-    }
-
-    override suspend fun provideLocation(info: JukeboxInfo, clientInfo: ClientInfo?): URL? {
-        val dbLocation =
-            withContext(Dispatchers.IO) { EternalJukebox.database.provideAudioLocation(info.id, clientInfo) }
-
-        if (dbLocation != null) {
-            logger.trace("[{}] Using cached location for {}", clientInfo?.userUID, info.id)
-            return withContext(Dispatchers.IO) { URL(dbLocation) }
-        }
-        return null
     }
 
     private fun getMultiContentDetailsWithKey(ids: List<String>): List<YoutubeContentItem> {

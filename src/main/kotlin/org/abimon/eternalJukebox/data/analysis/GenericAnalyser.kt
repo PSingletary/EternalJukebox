@@ -81,14 +81,30 @@ object GenericAnalyser : IAnalyser {
         logger.trace("[{}] Attempting to get info for ID: {}", clientInfo?.userUID, id)
         
         return try {
+            // Check if this is a direct URL
+            if (id.startsWith("http")) {
+                return getInfoFromUrl(id, clientInfo)
+            }
+            
             // Check if this is a YouTube video ID
             if (isValidYouTubeId(id)) {
                 val url = "$VIDEO_LINK_PREFIX$id"
                 getInfoFromUrl(url, clientInfo)
             } else {
-                // Try to extract info from URL hash or direct URL
-                logger.warn("[{}] ID {} is not a valid YouTube ID, returning null", clientInfo?.userUID, id)
-                null
+                // Try to extract info from URL hash or other platforms
+                logger.debug("[{}] ID {} is not a valid YouTube ID, trying as generic URL", clientInfo?.userUID, id)
+                
+                // For non-YouTube IDs, create a basic JukeboxInfo
+                // This will be handled by the GenericAudioSource
+                JukeboxInfo(
+                    service = "GENERIC",
+                    id = id,
+                    name = "Unknown Track",
+                    title = "Unknown Track",
+                    artist = "Unknown Artist",
+                    url = id, // Use ID as URL if it's not a standard format
+                    duration = 0 // Will be updated when audio is downloaded
+                )
             }
         } catch (e: Exception) {
             logger.error("[{}] Failed to get info for ID {}: {}", clientInfo?.userUID, id, e.message)
@@ -103,22 +119,89 @@ object GenericAnalyser : IAnalyser {
         logger.trace("[{}] Attempting to get info from URL: {}", clientInfo?.userUID, url)
         
         return try {
-            val videoId = extractVideoId(url) ?: return null
-            val streamInfo = StreamInfo.getInfo(newPipeService, url)
+            // Check if it's a YouTube URL
+            if (url.contains("youtube.com") || url.contains("youtu.be")) {
+                val videoId = extractVideoId(url) ?: return null
+                val streamInfo = StreamInfo.getInfo(newPipeService, url)
+                
+                return JukeboxInfo(
+                    service = "YOUTUBE",
+                    id = videoId,
+                    name = streamInfo.name ?: "Unknown Title",
+                    title = streamInfo.name ?: "Unknown Title",
+                    artist = streamInfo.uploaderName ?: "Unknown Artist", 
+                    url = url,
+                    duration = (streamInfo.duration ?: 0) * 1000 // Convert seconds to milliseconds
+                )
+            }
+            
+            // For other platforms, create a generic JukeboxInfo
+            // The GenericAudioSource will handle the actual metadata extraction
+            val platformAndId = extractPlatformAndId(url)
+            val service = platformAndId?.first?.uppercase() ?: "GENERIC"
+            val id = platformAndId?.second ?: generateUrlHash(url)
             
             JukeboxInfo(
-                service = "YOUTUBE",
-                id = videoId,
-                name = streamInfo.name ?: "Unknown Title",
-                title = streamInfo.name ?: "Unknown Title",
-                artist = streamInfo.uploaderName ?: "Unknown Artist", 
+                service = service,
+                id = id,
+                name = "Unknown Track",
+                title = "Unknown Track", 
+                artist = "Unknown Artist",
                 url = url,
-                duration = (streamInfo.duration ?: 0) * 1000 // Convert seconds to milliseconds
+                duration = 0 // Will be updated when audio is downloaded and analyzed
             )
         } catch (e: Exception) {
             logger.error("[{}] Failed to get info from URL {}: {}", clientInfo?.userUID, url, e.message)
             null
         }
+    }
+    
+    /**
+     * Extract platform and ID from URL (similar to GenericAudioSource)
+     */
+    private fun extractPlatformAndId(url: String): Pair<String, String>? {
+        val platformPatterns = mapOf(
+            "youtube" to listOf(
+                Regex("(?:youtube\\.com/watch\\?v=|youtu\\.be/|youtube\\.com/embed/)([\\w-]{11})"),
+                Regex("youtube\\.com/v/([\\w-]{11})"),
+                Regex("youtube\\.com/.*[?&]v=([\\w-]{11})")
+            ),
+            "soundcloud" to listOf(
+                Regex("soundcloud\\.com/([^/]+)/([^/?]+)"),
+                Regex("soundcloud\\.com/[^/]+/[^/]+/([^/?]+)")
+            ),
+            "bandcamp" to listOf(
+                Regex("([^.]+)\\.bandcamp\\.com/track/([^/?]+)"),
+                Regex("bandcamp\\.com/track/([^/?]+)")
+            ),
+            "vimeo" to listOf(
+                Regex("vimeo\\.com/(\\d+)"),
+                Regex("player\\.vimeo\\.com/video/(\\d+)")
+            ),
+            "twitch" to listOf(
+                Regex("twitch\\.tv/videos/(\\d+)"),
+                Regex("clips\\.twitch\\.tv/([^/?]+)")
+            ),
+            "tiktok" to listOf(
+                Regex("tiktok\\.com/@([^/]+)/video/(\\d+)"),
+                Regex("vm\\.tiktok\\.com/([^/?]+)")
+            ),
+            "twitter" to listOf(
+                Regex("twitter\\.com/[^/]+/status/(\\d+)"),
+                Regex("x\\.com/[^/]+/status/(\\d+)")
+            )
+        )
+        
+        for ((platform, patterns) in platformPatterns) {
+            for (pattern in patterns) {
+                val match = pattern.find(url)
+                if (match != null) {
+                    val id = match.groupValues.drop(1).joinToString("/")
+                    return Pair(platform, id)
+                }
+            }
+        }
+        return null
     }
     
     /**
